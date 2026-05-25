@@ -128,6 +128,8 @@ export const playerInvite = sqliteTable(
     playerGender: text("player_gender", { enum: ["MALE", "FEMALE"] }),
     defaultRateCents: integer("default_rate_cents"),
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    maxUses: integer("max_uses").notNull().default(1),
+    useCount: integer("use_count").notNull().default(0),
     usedAt: integer("used_at", { mode: "timestamp" }),
     usedById: text("used_by_id").references(() => user.id),
     createdAt: integer("created_at", { mode: "timestamp" })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Tag } from "lucide-react";
@@ -62,6 +62,12 @@ export function OrderForm({
   const [customerWechat, setCustomerWechat] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
+  useEffect(() => {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setStartAt(local);
+    setEndAt(local);
+  }, []);
   const [rate, setRate] = useState("");
   const [discount, setDiscount] = useState("");
   const [usePrepay, setUsePrepay] = useState(false);

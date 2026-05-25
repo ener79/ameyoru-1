@@ -16,13 +16,15 @@ export default async function PlayerInvitePage({
       defaultRateCents: playerInvite.defaultRateCents,
       expiresAt: playerInvite.expiresAt,
       usedAt: playerInvite.usedAt,
+      maxUses: playerInvite.maxUses,
+      useCount: playerInvite.useCount,
     })
     .from(playerInvite)
     .where(eq(playerInvite.inviteToken, token))
     .get();
 
   const invalid =
-    !invite || !!invite.usedAt || invite.expiresAt.getTime() < Date.now();
+    !invite || (invite.maxUses > 0 && invite.useCount >= invite.maxUses) || invite.expiresAt.getTime() < Date.now();
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">

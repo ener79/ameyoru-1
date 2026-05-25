@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { user, account, playerInvite } from "@/db/schema";
@@ -349,6 +350,7 @@ export async function resetPlayerQrSecurityCodeAction(input: {
     .where(eq(user.id, parsed.data.id));
 
   revalidatePath("/players");
+
   return { ok: true };
 }
 
@@ -376,12 +378,17 @@ export async function completePlayerInviteAction(
       defaultRateCents: playerInvite.defaultRateCents,
       expiresAt: playerInvite.expiresAt,
       usedAt: playerInvite.usedAt,
+      maxUses: playerInvite.maxUses,
+      useCount: playerInvite.useCount,
     })
     .from(playerInvite)
     .where(eq(playerInvite.inviteToken, parsed.data.token))
     .get();
   if (!invite) return { ok: false, error: "链接不存在" };
-  if (invite.usedAt) return { ok: false, error: "链接已使用" };
+  // multi-use check
+  if (invite.maxUses > 0 && invite.useCount >= invite.maxUses) {
+    return { ok: false, error: "链接已达使用上限" };
+  }
   if (invite.expiresAt.getTime() < Date.now()) {
     return { ok: false, error: "链接已过期" };
   }
@@ -409,18 +416,11 @@ export async function completePlayerInviteAction(
   if (!alipayUpload) return { ok: false, error: "请上传支付宝收款码" };
   if (!alipayUpload.ok) return { ok: false, error: alipayUpload.error };
 
-  async function reserveInviteUse() {
-    return db
-      .update(playerInvite)
-      .set({ usedAt: new Date() })
-      .where(and(eq(playerInvite.id, inviteId), isNull(playerInvite.usedAt)))
-      .returning({ id: playerInvite.id });
-  }
-
-  const reserved = await reserveInviteUse();
-  if (reserved.length === 0) {
-    return { ok: false, error: "链接已使用" };
-  }
+  // Multi-use: just increment useCount
+  db.update(playerInvite)
+    .set({ useCount: sql`${playerInvite.useCount} + 1`, usedAt: new Date() })
+    .where(eq(playerInvite.id, inviteId))
+    .run();
 
   const res = await createUser({
     username: parsed.data.username,
@@ -434,10 +434,6 @@ export async function completePlayerInviteAction(
     qrSecurityCodeHash,
   });
   if (!res.ok) {
-    await db
-      .update(playerInvite)
-      .set({ usedAt: null })
-      .where(eq(playerInvite.id, inviteId));
     return res;
   }
 
@@ -447,10 +443,6 @@ export async function completePlayerInviteAction(
     .where(eq(user.username, parsed.data.username))
     .get();
   if (!created) {
-    await db
-      .update(playerInvite)
-      .set({ usedAt: null })
-      .where(eq(playerInvite.id, inviteId));
     return { ok: false, error: "创建失败" };
   }
 
@@ -463,5 +455,7 @@ export async function completePlayerInviteAction(
   await saveInviteQr(alipayUpload.upload, created.id, "ALIPAY");
 
   revalidatePath("/players");
+
+
   return { ok: true };
 }

@@ -240,39 +240,36 @@ export function OrdersList({
                           <Tag className="size-3 text-warning" />
                         )}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>{formatRelativeDateTime(o.startAt)}</span>
-                        <span>·</span>
-                        <span>{formatDuration(o.durationMin)}</span>
+                      <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">时间 </span>
+                          <span>{formatRelativeDateTime(o.startAt)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">时长 </span>
+                          <span className="font-medium">{formatDuration(o.durationMin)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">单价 </span>
+                          <span className="font-mono">{formatYuan(o.hourlyRateCents)}/h</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">{canManage ? "实付 " : "应得 "}</span>
+                          <span className="font-mono font-medium">{canManage ? (isCanceled ? "—" : formatYuan(o.payableCents)) : formatYuan(payoutCents)}</span>
+                        </div>
+                        {canManage && (
+                          <div>
+                            <span className="text-muted-foreground">应得 </span>
+                            <span className="font-mono text-success">{formatYuan(payoutCents)}</span>
+                          </div>
+                        )}
                         {canManage && o.dispatcherId !== o.playerId && (
-                          <>
-                            <span>·</span>
-                            <span>派单 {o.dispatcherName}</span>
-                          </>
+                          <div>
+                            <span className="text-muted-foreground">派单 </span>
+                            <span>{o.dispatcherName}</span>
+                          </div>
                         )}
                       </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-mono text-sm font-medium tabular-nums">
-                        {canManage
-                          ? isCanceled
-                            ? "—"
-                            : formatYuan(o.payableCents)
-                          : formatYuan(payoutCents)}
-                      </div>
-                      {canManage && (
-                        <div
-                          className={cn(
-                            "font-mono text-[11px] tabular-nums",
-                            payoutCents > 0
-                              ? "text-success"
-                              : "text-muted-foreground"
-                          )}
-                        >
-                          {isCanceled ? "补偿 " : "+"}
-                          {formatYuan(payoutCents)}
-                        </div>
-                      )}
                     </div>
                     <OrderStatusGroup
                       orderStatus={o.orderStatus}
@@ -420,6 +417,10 @@ function OrderDetailSheet({
                   {canManage && order.dispatcherId !== order.playerId && (
                     <DetailRow label="派单人" value={order.dispatcherName} />
                   )}
+                  <DetailRow
+                    label="开始时间"
+                    value={formatDateTime(order.startAt)}
+                  />
                   <DetailRow
                     label="时长"
                     value={formatDuration(order.durationMin)}

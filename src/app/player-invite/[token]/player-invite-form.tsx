@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { centsToYuanString } from "@/lib/format";
 import { completePlayerInviteAction } from "@/server/actions/users";
+import { authClient } from "@/lib/auth-client";
 import type { PlayerGender } from "@/db/schema";
 
 export function PlayerInviteForm({
@@ -31,7 +32,7 @@ export function PlayerInviteForm({
   const [confirmSecurityCode, setConfirmSecurityCode] = useState("");
   const [playerGender, setPlayerGender] = useState<PlayerGender>(initialGender);
   const [defaultRate, setDefaultRate] = useState(
-    centsToYuanString(initialRateCents)
+    initialGender === "MALE" ? "35" : "40"
   );
   const [wechatQr, setWechatQr] = useState<File | null>(null);
   const [alipayQr, setAlipayQr] = useState<File | null>(null);
@@ -80,8 +81,18 @@ export function PlayerInviteForm({
         toast.error(res.error);
         return;
       }
-      toast.success("账号已创建,请登录");
-      router.push("/login");
+      // Auto sign-in
+      const signInRes = await authClient.signIn.username({
+        username: username.trim(),
+        password,
+      });
+      if (signInRes.error) {
+        toast.success("账号已创建，请登录");
+        router.push("/login");
+      } else {
+        toast.success("账号已创建");
+        router.push("/overview");
+      }
       router.refresh();
     });
   }
@@ -96,7 +107,7 @@ export function PlayerInviteForm({
               id="displayName"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="图图"
+              placeholder=""
               required
               autoFocus
             />
@@ -107,7 +118,7 @@ export function PlayerInviteForm({
               id="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="图图01"
+              placeholder=""
               required
             />
           </div>
@@ -184,14 +195,19 @@ export function PlayerInviteForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="defaultRate">默认单价(元/小时)</Label>
-            <Input
+            <select
               id="defaultRate"
-              type="number"
-              step="0.01"
-              min="0"
               value={defaultRate}
               onChange={(e) => setDefaultRate(e.target.value)}
-            />
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              {(playerGender === "MALE"
+                ? ["35", "40", "45", "50"]
+                : ["40", "45", "50", "55"]
+              ).map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
           </div>
         </div>
 

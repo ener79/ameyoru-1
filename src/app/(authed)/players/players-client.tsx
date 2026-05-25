@@ -517,7 +517,7 @@ function CreatePlayerDialog({
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="tutu"
+                placeholder=""
                 required
                 autoFocus
               />
@@ -528,7 +528,7 @@ function CreatePlayerDialog({
                 id="displayName"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="图图"
+                placeholder=""
                 required
               />
             </div>
@@ -548,14 +548,19 @@ function CreatePlayerDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="defaultRate">默认单价(元/小时)</Label>
-              <Input
+              <select
                 id="defaultRate"
-                type="number"
-                step="0.01"
-                min="0"
                 value={defaultRate}
                 onChange={(e) => setDefaultRate(e.target.value)}
-              />
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                {(playerGender === "MALE"
+                  ? ["35", "40", "45", "50"]
+                  : ["40", "45", "50", "55"]
+                ).map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">

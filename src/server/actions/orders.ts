@@ -181,8 +181,8 @@ export async function createOrderAction(input: CreateOrderInput) {
   const id = nanoid();
   const canUsePrepay = me.role !== "PLAYER" && !!data.usePrepay;
   let prepayUsedCents = 0;
-  await db.transaction(async (tx) => {
-    const currentCustomer = await tx
+  db.transaction((tx) => {
+    const currentCustomer = tx
       .select({ balanceCents: customer.balanceCents })
       .from(customer)
       .where(eq(customer.id, customerRec.id))
@@ -191,7 +191,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       ? Math.min(currentCustomer?.balanceCents ?? 0, computed.payableCents)
       : 0;
 
-    await tx.insert(order).values({
+    tx.insert(order).values({
       id,
       dispatcherId: me.id,
       playerId,
@@ -208,16 +208,16 @@ export async function createOrderAction(input: CreateOrderInput) {
       commissionCents: computed.commissionCents,
       playerEarnCents: computed.playerEarnCents,
       note: data.note ?? null,
-    });
+    }).run();
 
     if (prepayUsedCents > 0) {
-      await tx
+      tx
         .update(customer)
         .set({
           balanceCents: sql`${customer.balanceCents} - ${prepayUsedCents}`,
         })
-        .where(eq(customer.id, customerRec.id));
-      await tx.insert(customerBalanceTxn).values({
+        .where(eq(customer.id, customerRec.id)).run();
+      tx.insert(customerBalanceTxn).values({
         id: nanoid(),
         customerId: customerRec.id,
         orderId: id,
@@ -225,7 +225,7 @@ export async function createOrderAction(input: CreateOrderInput) {
         amountCents: -prepayUsedCents,
         note: "订单预存抵扣",
         createdById: me.id,
-      });
+      }).run();
     }
   });
 
@@ -340,8 +340,8 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   const now = new Date();
   const noCompensation = compensationCents === 0;
 
-  await db.transaction(async (tx) => {
-    await tx
+  db.transaction((tx) => {
+    tx
       .update(order)
       .set({
         orderStatus: "CANCELED",
@@ -352,16 +352,16 @@ export async function cancelOrderAction(input: CancelOrderInput) {
         settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
         settledAt: noCompensation ? now : null,
       })
-      .where(eq(order.id, id));
+      .where(eq(order.id, id)).run();
 
     if (target.prepayUsedCents > 0) {
-      await tx
+      tx
         .update(customer)
         .set({
           balanceCents: sql`${customer.balanceCents} + ${target.prepayUsedCents}`,
         })
-        .where(eq(customer.id, target.customerId));
-      await tx.insert(customerBalanceTxn).values({
+        .where(eq(customer.id, target.customerId)).run();
+      tx.insert(customerBalanceTxn).values({
         id: nanoid(),
         customerId: target.customerId,
         orderId: id,
@@ -369,7 +369,7 @@ export async function cancelOrderAction(input: CancelOrderInput) {
         amountCents: target.prepayUsedCents,
         note: "订单取消退回预存",
         createdById: me.id,
-      });
+      }).run();
     }
   });
   invalidatePages(id);

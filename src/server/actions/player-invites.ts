@@ -12,6 +12,7 @@ import { nanoid } from "../id";
 const createSchema = z.object({
   playerGender: z.enum(["MALE", "FEMALE"]).optional(),
   defaultRateYuan: z.string().optional(),
+  maxUses: z.number().int().min(0).optional(),
 });
 
 export async function createPlayerInviteAction(
@@ -41,6 +42,7 @@ export async function createPlayerInviteAction(
     createdById: me.id,
     playerGender: parsed.data.playerGender ?? null,
     defaultRateCents,
+    maxUses: parsed.data.maxUses ?? 1,
     expiresAt,
   });
 
