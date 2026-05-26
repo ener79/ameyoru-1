@@ -45,6 +45,20 @@ export function formatDateTime(date: Date | string | number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${formatTime(d)}`;
 }
 
+/** 给 startAt + durationMin 算结束时间。同日只显示 HH:mm,跨日显示完整时间。 */
+export function formatEndAt(
+  startAt: Date | string | number,
+  durationMin: number
+): string {
+  const s = toDate(startAt);
+  const e = new Date(s.getTime() + durationMin * 60000);
+  const sameDay =
+    s.getFullYear() === e.getFullYear() &&
+    s.getMonth() === e.getMonth() &&
+    s.getDate() === e.getDate();
+  return sameDay ? formatTime(e) : formatDateTime(e);
+}
+
 /** 仅日期 yyyy-MM-dd */
 export function formatDate(date: Date | string | number): string {
   const d = toDate(date);

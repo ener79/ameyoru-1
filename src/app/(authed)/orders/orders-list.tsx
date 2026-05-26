@@ -45,6 +45,7 @@ import {
   centsToYuanString,
   formatDateTime,
   formatDuration,
+  formatEndAt,
   formatRelativeDateTime,
   formatYuan,
 } from "@/lib/format";
@@ -420,6 +421,10 @@ function OrderDetailSheet({
                   <DetailRow
                     label="开始时间"
                     value={formatDateTime(order.startAt)}
+                  />
+                  <DetailRow
+                    label="结束时间"
+                    value={formatEndAt(order.startAt, order.durationMin)}
                   />
                   <DetailRow
                     label="时长"

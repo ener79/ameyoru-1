@@ -60,7 +60,9 @@ export async function requireSession(opts?: {
   allowMustChangePwd?: boolean;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) redirect("/login");
+  // session cookie 存在但 DB 里查不到 user(被删 / session 表清空 / DB 重建),
+  // 必须带 ?stale=1,否则 middleware 会因 cookie 还在又把 /login 跳回 /,死循环。
+  if (!session?.user) redirect("/login?stale=1");
 
   const freshUser = await getFreshUser(session.user.id);
   if (!freshUser?.active) redirect("/login?inactive=1");

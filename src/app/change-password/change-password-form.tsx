@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -11,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function ChangePasswordForm({ forced }: { forced: boolean }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -43,8 +41,8 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         return;
       }
       toast.success("密码已更新");
-      router.push("/");
-      router.refresh();
+      // 硬跳转:revokeOtherSessions 会重发 session cookie,需等浏览器写入后再访问受保护页面。
+      window.location.assign("/");
     });
   }
 

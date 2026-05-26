@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Lock, User } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -10,7 +9,6 @@ import { InputWithIcon } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -28,8 +26,9 @@ export function LoginForm() {
         toast.error(error.message ?? "用户名或密码错误");
         return;
       }
-      router.push("/");
-      router.refresh();
+      // 硬跳转,确保浏览器已写入 session cookie 才发下一次请求,
+      // 避免 router.push + refresh 触发的 RSC 请求带不上 cookie。
+      window.location.assign("/");
     });
   }
 

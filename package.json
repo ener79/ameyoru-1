@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "TZ=Asia/Shanghai next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "TZ=Asia/Shanghai next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

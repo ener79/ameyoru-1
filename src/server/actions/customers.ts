@@ -83,20 +83,21 @@ export async function addCustomerDepositAction(
     .get();
   if (!existing) return { ok: false as const, error: "客户不存在" };
 
-  await db.transaction(async (tx) => {
-    await tx
+  db.transaction((tx) => {
+    tx
       .update(customer)
       .set({ balanceCents: sql`${customer.balanceCents} + ${amountCents}` })
-      .where(eq(customer.id, customerId));
+      .where(eq(customer.id, customerId))
+      .run();
 
-    await tx.insert(customerBalanceTxn).values({
+    tx.insert(customerBalanceTxn).values({
       id: nanoid(),
       customerId,
       type: "DEPOSIT",
       amountCents,
       note,
       createdById: me.id,
-    });
+    }).run();
   });
 
   revalidatePath("/customers");

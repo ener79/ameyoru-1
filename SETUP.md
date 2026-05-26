@@ -197,6 +197,9 @@ better-sqlite3 是 native 模块,需要本机编译。如果出错,装 Xcode CLT
 **忘了老板密码**
 重新跑 `npm run db:seed` 不会重置已有账号。最简单的办法:删 `data/mo.db` 重新初始化(数据会丢)。或者用 `npm run db:studio` 直接改 `account.password` 字段(需要重新 hash)。
 
+**`时间显示偏了 8 小时(只在生产出现)`**
+`npm run dev` / `npm run start` 已经把 `TZ=Asia/Shanghai` 写进 scripts。但如果生产用 Docker / PM2 / systemd 直接跑 `node` 而不是 `npm start`,要自己在容器/进程环境里设 `TZ=Asia/Shanghai`,否则 `date-range`(今日/本周/本月)、leaderboard 会按 UTC 切日。订单表单已经走客户端 → UTC ISO 链路,这一层 TZ 无关;但 server 端 `getDay/getHours` 等本地时间方法仍依赖运行时 TZ。
+
 ## 设计风格说明
 
 - **配色**:浅色为主,主色 indigo-600(`#4F46E5`),排行榜强调 amber 渐变,成功 emerald,警告 amber,危险 red

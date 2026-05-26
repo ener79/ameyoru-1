@@ -7,7 +7,11 @@ export default function middleware(request: NextRequest) {
 
   const isLogin = pathname === "/login";
   const isPlayerInvite = pathname.startsWith("/player-invite");
-  const forceLogin = request.nextUrl.searchParams.has("inactive");
+  // inactive: 用户被停用;stale: cookie 还在但 session DB 失效。
+  // 这两个 param 一旦带上,即便 cookie 还在也允许进 /login,避免死循环。
+  const forceLogin =
+    request.nextUrl.searchParams.has("inactive") ||
+    request.nextUrl.searchParams.has("stale");
 
   // 邀请链接无需登录
   if (isPlayerInvite) return NextResponse.next();

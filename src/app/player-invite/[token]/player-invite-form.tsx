@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ export function PlayerInviteForm({
   initialGender: PlayerGender;
   initialRateCents: number;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
@@ -81,19 +79,19 @@ export function PlayerInviteForm({
         toast.error(res.error);
         return;
       }
-      // Auto sign-in
+      // Auto sign-in。用 window.location.assign 硬跳转,避免 router.push + refresh
+      // 在浏览器写入 session cookie 之前就发出 RSC 请求,导致 requireSession 失败。
       const signInRes = await authClient.signIn.username({
         username: username.trim(),
         password,
       });
       if (signInRes.error) {
-        toast.success("账号已创建，请登录");
-        router.push("/login");
+        toast.success("账号已创建,请登录");
+        window.location.assign("/login");
       } else {
         toast.success("账号已创建");
-        router.push("/overview");
+        window.location.assign("/overview");
       }
-      router.refresh();
     });
   }
 

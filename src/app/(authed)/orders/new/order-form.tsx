@@ -139,6 +139,8 @@ export function OrderForm({
         ? selectedCustomer
         : null;
     startTransition(async () => {
+      // datetime-local 无时区,客户端先按本地时区算出 UTC ISO,
+      // 服务端 new Date() 解析 Z 后缀就 TZ 无关了(prod UTC 容器原本会偏 8 小时)。
       const res = await createOrderAction({
         playerId: isManager ? playerId : undefined,
         customerId: matchedCustomer?.id,
@@ -146,8 +148,8 @@ export function OrderForm({
         customerWechat: matchedCustomer
           ? undefined
           : customerWechat.trim() || undefined,
-        startAt,
-        endAt,
+        startAt: new Date(startAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
         hourlyRateYuan: rate,
         discountYuan: isManager && discount ? discount : undefined,
         usePrepay: isManager ? usePrepay : undefined,
