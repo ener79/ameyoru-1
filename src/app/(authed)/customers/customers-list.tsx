@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
   FileText,
+  GitMerge,
   Loader2,
   MessageCircle,
   MinusCircle,
+  MoreHorizontal,
   Pencil,
+  Trash2,
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,12 +29,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { avatarInitial, formatDuration, formatYuan } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   addCustomerDepositAction,
   deductCustomerBalanceAction,
+  deleteCustomerAction,
   getCustomerLedgerAction,
+  mergeCustomersAction,
   updateCustomerAction,
 } from "@/server/actions/customers";
 import type { CustomerBalanceTxnType, OrderStatus } from "@/db/schema";
@@ -98,6 +110,8 @@ export function CustomersList({
   const [editing, setEditing] = useState<CustomerRow | null>(null);
   const [depositing, setDepositing] = useState<CustomerRow | null>(null);
   const [deducting, setDeducting] = useState<CustomerRow | null>(null);
+  const [merging, setMerging] = useState<CustomerRow | null>(null);
+  const [deleting, setDeleting] = useState<CustomerRow | null>(null);
   const [ledgerCustomer, setLedgerCustomer] = useState<CustomerRow | null>(null);
   return (
     <>
@@ -132,14 +146,14 @@ export function CustomersList({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                    <span className="font-mono">#{c.memberNo}</span>
                     {c.wechat && (
                       <span className="inline-flex items-center gap-0.5 font-mono">
                         <MessageCircle className="size-3" />
                         {c.wechat}
                       </span>
                     )}
-                    {c.note && <span className="truncate">· {c.note}</span>}
+                    {c.note && <span className="truncate">{c.note}</span>}
+                    <span className="font-mono opacity-50">#{c.memberNo}</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -186,14 +200,28 @@ export function CustomersList({
                   <FileText />
                   查看流水
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="编辑客户"
-                  onClick={() => setEditing(c)}
-                >
-                  <Pencil />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="更多操作">
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem onClick={() => setEditing(c)}>
+                      <Pencil /> 编辑
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setMerging(c)}>
+                      <GitMerge /> 合并客户
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setDeleting(c)}
+                    >
+                      <Trash2 /> 删除客户
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </li>
           ))}
@@ -223,6 +251,23 @@ export function CustomersList({
           customer={deducting}
           players={players}
           onClose={() => setDeducting(null)}
+        />
+      )}
+
+      {merging && (
+        <MergeDialog
+          key={merging.id}
+          customer={merging}
+          allCustomers={customers}
+          onClose={() => setMerging(null)}
+        />
+      )}
+
+      {deleting && (
+        <DeleteCustomerDialog
+          key={deleting.id}
+          customer={deleting}
+          onClose={() => setDeleting(null)}
         />
       )}
 
@@ -555,6 +600,249 @@ function DeductDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MergeDialog({
+  customer,
+  allCustomers,
+  onClose,
+}: {
+  customer: CustomerRow;
+  allCustomers: CustomerRow[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pending, startTransition] = useTransition();
+
+  const candidates = useMemo(
+    () => allCustomers.filter((c) => c.id !== customer.id),
+    [allCustomers, customer.id]
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return candidates;
+    return candidates.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.memberNo.includes(q) ||
+        (c.wechat?.toLowerCase().includes(q) ?? false)
+    );
+  }, [candidates, query]);
+
+  const selectedCustomers = useMemo(
+    () => candidates.filter((c) => selectedIds.has(c.id)),
+    [candidates, selectedIds]
+  );
+  const addedOrders = selectedCustomers.reduce((s, c) => s + c.orderCount, 0);
+  const addedBalance = selectedCustomers.reduce(
+    (s, c) => s + c.balanceCents,
+    0
+  );
+
+  function toggle(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (selectedIds.size === 0) {
+      toast.error("请至少选一个要合并的客户");
+      return;
+    }
+    startTransition(async () => {
+      const res = await mergeCustomersAction({
+        primaryId: customer.id,
+        mergeIds: Array.from(selectedIds),
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`已合并 ${res.mergedCount} 个客户`);
+      onClose();
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>合并客户</DialogTitle>
+          <DialogDescription>
+            把其它客户合并到 <span className="font-medium">{customer.name}</span>
+            。被合并客户的订单、流水、余额都会归到这里,然后删除。不可撤销。
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="merge-search">搜索要合并的客户</Label>
+            <Input
+              id="merge-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="按名字 / 微信 / 会员号过滤"
+              autoFocus
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground">没有匹配的客户</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto rounded-md border">
+              <ul className="divide-y">
+                {filtered.map((c) => {
+                  const checked = selectedIds.has(c.id);
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(c.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+                          checked && "bg-primary/10"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex size-4 shrink-0 items-center justify-center rounded border",
+                            checked
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-input"
+                          )}
+                        >
+                          {checked && <Check className="size-3" />}
+                        </span>
+                        <span className="flex-1 truncate">{c.name}</span>
+                        <span className="font-mono text-xs text-muted-foreground opacity-60">
+                          #{c.memberNo}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {c.orderCount} 单
+                        </span>
+                        {c.balanceCents > 0 && (
+                          <span className="font-mono text-xs tabular-nums text-success">
+                            {formatYuan(c.balanceCents)}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {selectedIds.size > 0 && (
+            <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+              已选 {selectedIds.size} 人,合并后:
+              <span className="ml-1 font-medium text-foreground">
+                {customer.name}
+              </span>{" "}
+              共{" "}
+              <span className="font-mono tabular-nums">
+                {customer.orderCount + addedOrders}
+              </span>{" "}
+              单 · 余额{" "}
+              <span className="font-mono tabular-nums">
+                {formatYuan(customer.balanceCents + addedBalance)}
+              </span>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={pending}
+            >
+              取消
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={pending || selectedIds.size === 0}
+            >
+              {pending && <Loader2 className="animate-spin" />}
+              确认合并
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteCustomerDialog({
+  customer,
+  onClose,
+}: {
+  customer: CustomerRow;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function handleConfirm() {
+    startTransition(async () => {
+      const res = await deleteCustomerAction({ id: customer.id });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("已删除客户");
+      onClose();
+      router.refresh();
+    });
+  }
+
+  const hasRefs = customer.orderCount > 0 || customer.balanceCents !== 0;
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>删除客户</DialogTitle>
+          <DialogDescription>
+            确认删除 <span className="font-medium">{customer.name}</span>?此操作不可撤销。
+          </DialogDescription>
+        </DialogHeader>
+        {hasRefs && (
+          <p className="text-sm text-destructive">
+            该客户已有订单或预存流水,无法删除。如有重复请用合并。
+          </p>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={pending}
+          >
+            取消
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={pending || hasRefs}
+          >
+            {pending && <Loader2 className="animate-spin" />}
+            确认删除
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

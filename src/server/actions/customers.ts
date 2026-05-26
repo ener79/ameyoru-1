@@ -51,6 +51,11 @@ const deductSchema = z.object({
   note: optionalTrimmed(200),
 });
 
+const mergeSchema = z.object({
+  primaryId: z.string(),
+  mergeIds: z.array(z.string()).min(1, "请选择至少一个客户合并"),
+});
+
 export async function updateCustomerAction(input: z.infer<typeof updateSchema>) {
   await requireSession({ role: ["BOSS", "STAFF"] });
   const parsed = updateSchema.safeParse(input);
@@ -189,6 +194,95 @@ export async function deductCustomerBalanceAction(
 
   revalidatePath("/customers");
   revalidatePath("/orders/new");
+  return { ok: true as const };
+}
+
+export async function mergeCustomersAction(input: z.infer<typeof mergeSchema>) {
+  await requireSession({ role: ["BOSS", "STAFF"] });
+  const parsed = mergeSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      error: parsed.error.errors[0]?.message ?? "参数错误",
+    };
+  }
+  const { primaryId, mergeIds } = parsed.data;
+  const uniqueMergeIds = Array.from(new Set(mergeIds));
+  if (uniqueMergeIds.includes(primaryId)) {
+    return { ok: false as const, error: "不能把客户合并到自己" };
+  }
+
+  const allIds = [primaryId, ...uniqueMergeIds];
+  const found = await db
+    .select({ id: customer.id, balanceCents: customer.balanceCents })
+    .from(customer)
+    .where(inArray(customer.id, allIds));
+  if (found.length !== allIds.length) {
+    return { ok: false as const, error: "客户不存在或已被删除" };
+  }
+
+  const mergeBalance = found
+    .filter((c) => uniqueMergeIds.includes(c.id))
+    .reduce((sum, c) => sum + c.balanceCents, 0);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(order)
+      .set({ customerId: primaryId })
+      .where(inArray(order.customerId, uniqueMergeIds));
+
+    await tx
+      .update(customerBalanceTxn)
+      .set({ customerId: primaryId })
+      .where(inArray(customerBalanceTxn.customerId, uniqueMergeIds));
+
+    if (mergeBalance !== 0) {
+      await tx
+        .update(customer)
+        .set({
+          balanceCents: sql`${customer.balanceCents} + ${mergeBalance}`,
+        })
+        .where(eq(customer.id, primaryId));
+    }
+
+    await tx.delete(customer).where(inArray(customer.id, uniqueMergeIds));
+  });
+
+  revalidatePath("/customers");
+  revalidatePath("/orders");
+  return { ok: true as const, mergedCount: uniqueMergeIds.length };
+}
+
+export async function deleteCustomerAction(input: { id: string }) {
+  await requireSession({ role: ["BOSS", "STAFF"] });
+
+  const [orderRef] = await db
+    .select({ id: order.id })
+    .from(order)
+    .where(eq(order.customerId, input.id))
+    .limit(1);
+  if (orderRef) {
+    return {
+      ok: false as const,
+      error: "客户有订单,不能删除。如有重复请用合并。",
+    };
+  }
+
+  const [txnRef] = await db
+    .select({ id: customerBalanceTxn.id })
+    .from(customerBalanceTxn)
+    .where(eq(customerBalanceTxn.customerId, input.id))
+    .limit(1);
+  if (txnRef) {
+    return {
+      ok: false as const,
+      error: "客户有充值/扣减流水,不能删除。如有重复请用合并。",
+    };
+  }
+
+  await db.delete(customer).where(eq(customer.id, input.id));
+
+  revalidatePath("/customers");
   return { ok: true as const };
 }
 
