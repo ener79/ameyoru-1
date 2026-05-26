@@ -614,6 +614,7 @@ function OrderDetailSheet({
           playerName={order.playerName}
           customerName={order.customerName}
           playerEarnCents={order.playerEarnCents}
+          wasSettled={order.settleStatus === "SETTLED"}
           onClose={(succeeded) => {
             setCancelOpen(false);
             if (succeeded) {
@@ -752,10 +753,10 @@ function ActionBar({
     );
   }
 
-  // 已结算 — 仅 BOSS 可撤销
+  // 已结算 — 仅 BOSS 可撤销/取消
   if (order.settleStatus === "SETTLED" && canBoss) {
     return (
-      <div className="border-t px-6 py-4">
+      <div className="border-t px-6 py-4 space-y-2">
         <Button
           variant="outline"
           className="w-full"
@@ -764,6 +765,17 @@ function ActionBar({
         >
           <RotateCcw /> 撤销结算
         </Button>
+        {order.orderStatus !== "CANCELED" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-destructive hover:text-destructive"
+            onClick={onOpenCancel}
+            disabled={pending}
+          >
+            <XCircle /> 取消订单
+          </Button>
+        )}
       </div>
     );
   }
@@ -807,22 +819,26 @@ function CancelDialog({
   playerName,
   customerName,
   playerEarnCents,
+  wasSettled,
   onClose,
 }: {
   orderId: string;
   playerName: string;
   customerName: string;
   playerEarnCents: number;
+  wasSettled: boolean;
   onClose: (succeeded: boolean) => void;
 }) {
   const [fault, setFault] = useState<CancelFault>("OTHER");
   const [note, setNote] = useState("");
   // 根据责任方智能预填补偿:陪玩责任 = 0;客户/店里责任 = 原应得
+  // 已结算订单:陪玩已收过钱,不再自动预填
   const [compensation, setCompensation] = useState("");
   const [pending, startTransition] = useTransition();
 
   function handleFaultChange(next: CancelFault) {
     setFault(next);
+    if (wasSettled) return;
     // 切换责任方时,如果用户还没动过补偿输入,自动预填
     if (next === "PLAYER" || next === "OTHER") {
       setCompensation("");
@@ -857,6 +873,7 @@ function CancelDialog({
           <DialogDescription>
             {playerName} · {customerName} · 原应得{" "}
             <span className="font-mono">{formatYuan(playerEarnCents)}</span>
+            {wasSettled && " · 已付款"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -896,10 +913,16 @@ function CancelDialog({
               placeholder="0(无补偿)"
             />
             <p className="text-xs text-muted-foreground">
-              {fault === "PLAYER" && "陪玩责任 — 通常 0 补偿"}
-              {fault === "CUSTOMER" && "客户责任 — 通常按原应得补偿陪玩"}
-              {fault === "SHOP" && "店里责任 — 通常按原应得补偿陪玩"}
-              {fault === "OTHER" && "请根据实际情况填写,可为 0"}
+              {wasSettled ? (
+                "陪玩已收过原应得,通常填 0;如需额外追加再填写"
+              ) : (
+                <>
+                  {fault === "PLAYER" && "陪玩责任 — 通常 0 补偿"}
+                  {fault === "CUSTOMER" && "客户责任 — 通常按原应得补偿陪玩"}
+                  {fault === "SHOP" && "店里责任 — 通常按原应得补偿陪玩"}
+                  {fault === "OTHER" && "请根据实际情况填写,可为 0"}
+                </>
+              )}
             </p>
           </div>
 

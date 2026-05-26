@@ -566,9 +566,6 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   if (target.orderStatus === "CANCELED") {
     return { ok: false as const, error: "订单已取消" };
   }
-  if (target.settleStatus === "SETTLED") {
-    return { ok: false as const, error: "已结算的订单不能取消,请先撤销结算" };
-  }
 
   const compensationCents = compensationYuan
     ? Math.max(0, yuanStringToCents(compensationYuan))
@@ -592,6 +589,7 @@ export async function cancelOrderAction(input: CancelOrderInput) {
         playerCompensationCents: compensationCents,
         settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
         settledAt: noCompensation ? now : null,
+        paidMethod: null,
       })
       .where(eq(order.id, id));
 
