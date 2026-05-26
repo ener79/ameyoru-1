@@ -4,7 +4,7 @@ import { customerSummary } from "@/server/stats";
 import { listActivePlayersAction } from "@/server/actions/customers";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
-import { formatYuan } from "@/lib/format";
+import { formatDuration, formatYuan } from "@/lib/format";
 import { CustomersList } from "./customers-list";
 
 export default async function CustomersPage() {
@@ -15,6 +15,7 @@ export default async function CustomersPage() {
   ]);
 
   const totalSpent = rows.reduce((s, r) => s + r.payableCents, 0);
+  const totalDuration = rows.reduce((s, r) => s + r.durationMin, 0);
   const totalBalance = rows.reduce((s, r) => s + r.balanceCents, 0);
   const repeats = rows.filter((r) => r.orderCount >= 2).length;
 
@@ -22,7 +23,7 @@ export default async function CustomersPage() {
     <>
       <PageHeader
         title="客户"
-        description={`${rows.length} 位客户 · ${repeats} 位回头客 · 累计 ${formatYuan(totalSpent)} · 预存余额 ${formatYuan(totalBalance)}`}
+        description={`${rows.length} 位客户 · ${repeats} 位回头客 · 累计 ${formatYuan(totalSpent)} · ${formatDuration(totalDuration)} · 预存余额 ${formatYuan(totalBalance)}`}
       />
 
       {rows.length === 0 ? (
@@ -41,6 +42,7 @@ export default async function CustomersPage() {
             note: c.note,
             orderCount: c.orderCount,
             payableCents: c.payableCents,
+            durationMin: c.durationMin,
             balanceCents: c.balanceCents,
           }))}
           players={players}

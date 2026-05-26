@@ -56,6 +56,7 @@ interface CustomerRow {
   note: string | null;
   orderCount: number;
   payableCents: number;
+  durationMin: number;
   balanceCents: number;
 }
 
@@ -162,6 +163,7 @@ export function CustomersList({
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {c.orderCount} 单
+                    {c.durationMin > 0 && ` · ${formatDuration(c.durationMin)}`}
                   </div>
                   {c.balanceCents > 0 && (
                     <div className="font-mono text-xs tabular-nums text-success">
@@ -640,6 +642,10 @@ function MergeDialog({
     [candidates, selectedIds]
   );
   const addedOrders = selectedCustomers.reduce((s, c) => s + c.orderCount, 0);
+  const addedDuration = selectedCustomers.reduce(
+    (s, c) => s + c.durationMin,
+    0
+  );
   const addedBalance = selectedCustomers.reduce(
     (s, c) => s + c.balanceCents,
     0
@@ -754,7 +760,11 @@ function MergeDialog({
               <span className="font-mono tabular-nums">
                 {customer.orderCount + addedOrders}
               </span>{" "}
-              单 · 余额{" "}
+              单 ·{" "}
+              <span className="font-mono tabular-nums">
+                {formatDuration(customer.durationMin + addedDuration)}
+              </span>{" "}
+              · 余额{" "}
               <span className="font-mono tabular-nums">
                 {formatYuan(customer.balanceCents + addedBalance)}
               </span>

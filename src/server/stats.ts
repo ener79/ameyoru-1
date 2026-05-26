@@ -229,6 +229,10 @@ export async function customerSummary() {
           Number
         ),
       payableCents: completedPayable.mapWith(Number),
+      durationMin:
+        sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' then ${order.durationMin} else 0 end), 0)`.mapWith(
+          Number
+        ),
       name: customer.name,
       memberNo: customer.memberNo,
       wechat: customer.wechat,
@@ -248,6 +252,7 @@ export async function customerSummary() {
     note: r.note,
     orderCount: r.orderCount,
     payableCents: r.payableCents ?? 0,
+    durationMin: r.durationMin ?? 0,
     balanceCents: r.balanceCents,
   }));
 }
