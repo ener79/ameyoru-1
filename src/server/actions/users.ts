@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -460,11 +460,6 @@ export async function completePlayerInviteAction(
   if (!alipayUpload) return { ok: false, error: "请上传支付宝收款码" };
   if (!alipayUpload.ok) return { ok: false, error: alipayUpload.error };
 
-  // Multi-use: just increment useCount
-  await db.update(playerInvite)
-    .set({ useCount: sql`${playerInvite.useCount} + 1`, usedAt: new Date() })
-    .where(eq(playerInvite.id, inviteId));
-
   const res = await createUser({
     username: parsed.data.username,
     displayName: parsed.data.displayName,
@@ -489,16 +484,20 @@ export async function completePlayerInviteAction(
     return { ok: false, error: "创建失败" };
   }
 
+  // 账号真正创建成功后才消耗名额,避免用户名冲突等失败把单次邀请烧掉
   await db
     .update(playerInvite)
-    .set({ usedById: created.id })
+    .set({
+      useCount: sql`${playerInvite.useCount} + 1`,
+      usedAt: new Date(),
+      usedById: created.id,
+    })
     .where(eq(playerInvite.id, inviteId));
 
   await saveInviteQr(wechatUpload.upload, created.id, "WECHAT");
   await saveInviteQr(alipayUpload.upload, created.id, "ALIPAY");
 
   revalidatePath("/players");
-
 
   return { ok: true };
 }
