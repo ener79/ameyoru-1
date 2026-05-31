@@ -10,6 +10,7 @@ import { computeOrder } from "@/lib/calc";
 import { yuanStringToCents } from "@/lib/format";
 import { DEFAULT_COMMISSION_PER_HOUR_CENTS } from "@/lib/constants";
 import { generateMemberNo, nanoid } from "../id";
+import { logAudit } from "../audit";
 import {
   notifyOrderCreated,
   notifyOrderCompleted,
@@ -250,6 +251,7 @@ export async function createOrderAction(input: CreateOrderInput) {
     discountCents: computed.discountCents,
     isSelfReport: me.role === "PLAYER",
   });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { customerName: customerRec.name, payableCents: computed.payableCents } });
 
   return {
     ok: true as const,
@@ -287,6 +289,7 @@ export async function completeOrderAction(input: { id: string }) {
     payableCents: target.payableCents,
     playerEarnCents: target.playerEarnCents,
   });
+  logAudit({ actorId: me.id, actorName: me.name, action: "COMPLETE_ORDER", targetType: "order", targetId: input.id });
 
   return { ok: true as const };
 }
@@ -470,6 +473,7 @@ export async function cancelOrderAction(input: CancelOrderInput) {
     fault,
     compensationCents,
   });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CANCEL_ORDER", targetType: "order", targetId: id, detail: { fault, compensationCents } });
 
   return { ok: true as const };
 }
@@ -519,6 +523,7 @@ export async function settleOrderAction(input: {
     playerEarnCents: amount,
     paidMethod: input.paidMethod,
   });
+  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: input.id, detail: { amount, paidMethod: input.paidMethod } });
 
   return { ok: true as const };
 }
@@ -531,4 +536,45 @@ export async function unsettleOrderAction(input: { id: string }) {
     .where(eq(order.id, input.id));
   invalidatePages(input.id);
   return { ok: true as const };
+}
+
+export async function batchSettleAction(input: {
+  ids: string[];
+  paidMethod?: "WECHAT" | "ALIPAY";
+}) {
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  if (!input.ids.length) return { ok: false as const, error: "没有选中订单" };
+  if (input.ids.length > 200) return { ok: false as const, error: "单次最多批量结算200单" };
+
+  const now = new Date();
+  let count = 0;
+  // 分批事务:每50条一批
+  const chunks: string[][] = [];
+  for (let i = 0; i < input.ids.length; i += 50) {
+    chunks.push(input.ids.slice(i, i + 50));
+  }
+  for (const chunk of chunks) {
+    await db.transaction(async (tx) => {
+      for (const id of chunk) {
+        const [target] = await tx
+          .select({ orderStatus: order.orderStatus, settleStatus: order.settleStatus })
+          .from(order)
+          .where(eq(order.id, id))
+          .limit(1);
+        if (!target) continue;
+        if (target.settleStatus === "SETTLED") continue;
+        if (target.orderStatus !== "COMPLETED" && target.orderStatus !== "CANCELED") continue;
+        await tx
+          .update(order)
+          .set({ settleStatus: "SETTLED", settledAt: now, paidMethod: input.paidMethod ?? null })
+          .where(eq(order.id, id));
+        count++;
+      }
+    });
+  }
+
+  revalidatePath("/overview");
+  revalidatePath("/orders");
+  revalidatePath("/payouts");
+  return { ok: true as const, count };
 }

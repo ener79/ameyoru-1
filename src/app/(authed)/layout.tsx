@@ -11,6 +11,7 @@ const bossNav: NavItem[] = [
   { href: "/customers", label: "客户" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
+  { href: "/audit-log", label: "日志" },
 ];
 
 const staffNav: NavItem[] = [

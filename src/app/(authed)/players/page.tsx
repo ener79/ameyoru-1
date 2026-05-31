@@ -1,12 +1,27 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, or, like, and } from "drizzle-orm";
 import { db } from "@/db";
 import { user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { PageHeader } from "@/components/page-header";
 import { PlayersClient } from "./players-client";
 
-export default async function PlayersPage() {
+export default async function PlayersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { q = "" } = await searchParams;
+
+  const conditions = [eq(user.role, "PLAYER")];
+  if (q) {
+    conditions.push(
+      or(
+        like(user.name, `%${q}%`),
+        like(user.username, `%${q}%`)
+      ) as ReturnType<typeof eq>
+    );
+  }
 
   const players = await db
     .select({
@@ -23,18 +38,14 @@ export default async function PlayersPage() {
       createdAt: user.createdAt,
     })
     .from(user)
-    .where(eq(user.role, "PLAYER"))
+    .where(and(...conditions))
     .orderBy(desc(user.createdAt));
 
   return (
     <>
       <PageHeader
         title="陪玩"
-        description={
-          me.role === "BOSS" || me.role === "STAFF"
-            ? "管理陪玩账号 · 创建后生成一次性初始密码"
-            : "陪玩列表(查看权限)"
-        }
+        description={`${players.length} 位陪玩`}
       />
       <PlayersClient
         canManage={me.role === "BOSS" || me.role === "STAFF"}

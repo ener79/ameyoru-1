@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   CheckCircle2,
+  CheckSquare,
+  Download,
   Inbox,
   Loader2,
   MessageCircle,
@@ -14,7 +16,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -59,11 +60,13 @@ import type {
 } from "@/db/schema";
 import {
   adjustOrderDurationAction,
+  batchSettleAction,
   cancelOrderAction,
   completeOrderAction,
   settleOrderAction,
   unsettleOrderAction,
 } from "@/server/actions/orders";
+import { exportOrdersCSV } from "@/server/actions/export";
 
 interface OrderRow {
   id: string;
@@ -97,22 +100,6 @@ interface OrderRow {
   note: string | null;
 }
 
-type TabKey = "all" | "IN_PROGRESS" | "PENDING_SETTLE" | "SETTLED";
-
-/** 待结算:已完成未结 + 已取消未结(补偿>0 时才会落到这) */
-const isPendingSettle = (o: OrderRow) =>
-  o.settleStatus === "UNSETTLED" &&
-  (o.orderStatus === "COMPLETED" || o.orderStatus === "CANCELED");
-
-const tabFilters: Record<TabKey, (o: OrderRow) => boolean> = {
-  all: () => true,
-  IN_PROGRESS: (o) => o.orderStatus === "IN_PROGRESS",
-  PENDING_SETTLE: isPendingSettle,
-  SETTLED: (o) =>
-    o.settleStatus === "SETTLED" &&
-    (o.orderStatus === "COMPLETED" ||
-      (o.orderStatus === "CANCELED" && o.playerCompensationCents > 0)),
-};
 
 const faultLabel: Record<CancelFault, string> = {
   PLAYER: "陪玩责任",
@@ -133,30 +120,23 @@ export function OrdersList({
   myId,
   orders,
   initialOpenId,
+  currentTab,
 }: {
   role: Role;
   myId: string;
   orders: OrderRow[];
   initialOpenId?: string | null;
+  currentTab?: string;
 }) {
   const canManage = role === "BOSS" || role === "STAFF";
-  const [tab, setTab] = useState<TabKey>(
-    initialOpenId ? "all" : "PENDING_SETTLE"
-  );
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchMethod, setBatchMethod] = useState<"WECHAT" | "ALIPAY" | undefined>(undefined);
+  const [batchPending, startBatchTransition] = useTransition();
+  const [exportPending, startExportTransition] = useTransition();
 
-  const filtered = useMemo(
-    () => orders.filter(tabFilters[tab]),
-    [tab, orders]
-  );
-
-  const counts = useMemo(
-    () => ({
-      inProgress: orders.filter(tabFilters.IN_PROGRESS).length,
-      pendingSettle: orders.filter(tabFilters.PENDING_SETTLE).length,
-    }),
-    [orders]
-  );
+  // Orders are already filtered server-side; show all passed orders
+  const filtered = orders;
 
   const totals = useMemo(() => {
     const payable = filtered.reduce(
@@ -169,37 +149,63 @@ export function OrdersList({
 
   const openOrder = openId ? orders.find((o) => o.id === openId) ?? null : null;
 
+  function handleBatchSettle() {
+    const pendingIds = filtered
+      .filter(
+        (o) =>
+          o.settleStatus === "UNSETTLED" &&
+          (o.orderStatus === "COMPLETED" || o.orderStatus === "CANCELED")
+      )
+      .map((o) => o.id);
+    if (!pendingIds.length) return;
+    startBatchTransition(async () => {
+      const res = await batchSettleAction({ ids: pendingIds, paidMethod: batchMethod });
+      if (res.ok) {
+        toast.success(`已批量结算 ${res.count} 单`);
+        setBatchOpen(false);
+        router.refresh();
+      } else {
+        toast.error((res as { ok: false; error: string }).error);
+      }
+    });
+  }
+
+  function handleExport() {
+    startExportTransition(async () => {
+      const res = await exportOrdersCSV({});
+      if (!res.ok) return;
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("导出成功");
+    });
+  }
+
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-          <TabsList>
-            <TabsTrigger value="PENDING_SETTLE">
-              待结算
-              {counts.pendingSettle > 0 && (
-                <Badge variant="default" className="ml-1 h-4 px-1 text-[10px]">
-                  {counts.pendingSettle}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="IN_PROGRESS">
-              进行中
-              {counts.inProgress > 0 && (
-                <Badge variant="outline" className="ml-1 h-4 px-1 text-[10px]">
-                  {counts.inProgress}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="SETTLED">已结算</TabsTrigger>
-            <TabsTrigger value="all">全部</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="text-xs text-muted-foreground">
-          {totals.count} 单 ·{" "}
-          <span className="font-mono tabular-nums text-foreground">
-            {formatYuan(canManage ? totals.payable : totals.earn)}
-          </span>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        <div className="flex items-center gap-2">
+          {canManage && currentTab === "PENDING_SETTLE" && filtered.some((o) => o.settleStatus === "UNSETTLED" && (o.orderStatus === "COMPLETED" || o.orderStatus === "CANCELED")) && (
+            <Button size="sm" variant="outline" onClick={() => setBatchOpen(true)}>
+              <CheckSquare className="size-4" /> 全部结算
+            </Button>
+          )}
+          {canManage && (
+            <Button size="sm" variant="outline" onClick={handleExport} disabled={exportPending}>
+              {exportPending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              导出
+            </Button>
+          )}
+          <div className="text-xs text-muted-foreground">
+            {totals.count} 单 ·{" "}
+            <span className="font-mono tabular-nums text-foreground">
+              {formatYuan(canManage ? totals.payable : totals.earn)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -301,6 +307,46 @@ export function OrdersList({
         myId={myId}
         onClose={() => setOpenId(null)}
       />
+
+      {/* 批量结算对话框 */}
+      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>批量结算</DialogTitle>
+            <DialogDescription>
+              将全部待结算订单标记为已结算
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label>支付方式（可选）</Label>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={batchMethod === "WECHAT" ? "default" : "outline"}
+                onClick={() => setBatchMethod(batchMethod === "WECHAT" ? undefined : "WECHAT")}
+              >
+                微信
+              </Button>
+              <Button
+                size="sm"
+                variant={batchMethod === "ALIPAY" ? "default" : "outline"}
+                onClick={() => setBatchMethod(batchMethod === "ALIPAY" ? undefined : "ALIPAY")}
+              >
+                支付宝
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchOpen(false)} disabled={batchPending}>
+              取消
+            </Button>
+            <Button onClick={handleBatchSettle} disabled={batchPending}>
+              {batchPending ? <Loader2 className="size-4 animate-spin" /> : <CheckSquare className="size-4" />}
+              确认结算
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

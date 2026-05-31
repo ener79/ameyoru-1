@@ -7,10 +7,16 @@ import { EmptyState } from "@/components/empty-state";
 import { formatDuration, formatYuan } from "@/lib/format";
 import { CustomersList } from "./customers-list";
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   await requireSession({ role: ["BOSS", "STAFF"] });
+  const { q = "" } = await searchParams;
+
   const [rows, players] = await Promise.all([
-    customerSummary(),
+    customerSummary({ q }),
     listActivePlayersAction(),
   ]);
 
@@ -29,8 +35,8 @@ export default async function CustomersPage() {
       {rows.length === 0 ? (
         <EmptyState
           icon={<Users />}
-          title="还没有客户"
-          description="陪玩报单或客服派单时,客户自动加入"
+          title={q ? `没有匹配"${q}"的客户` : "还没有客户"}
+          description={q ? "换个关键词试试" : "陪玩报单或客服派单时,客户自动加入"}
         />
       ) : (
         <CustomersList

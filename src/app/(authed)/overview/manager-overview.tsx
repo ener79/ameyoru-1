@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusGroup } from "@/components/order-status-badge";
 import { RankBadge } from "@/components/rank-badge";
-import { leaderboard, recentOrders, shopSummary } from "@/server/stats";
+import { leaderboard, recentOrders, shopSummary, dailyRevenue, weekOverWeekRevenue } from "@/server/stats";
 import {
   avatarInitial,
   formatRelativeDateTime,
@@ -17,12 +17,14 @@ import {
 
 /** 给 BOSS / STAFF 共用的店铺总览 */
 export async function ManagerOverview({ userName }: { userName: string }) {
-  const [today, week, month, weekRank, recent] = await Promise.all([
+  const [today, week, month, weekRank, recent, daily, wow] = await Promise.all([
     shopSummary("today"),
     shopSummary("week"),
     shopSummary("month"),
     leaderboard("week"),
     recentOrders({ limit: 6 }),
+    dailyRevenue(7),
+    weekOverWeekRevenue(),
   ]);
 
   return (
@@ -65,6 +67,26 @@ export async function ManagerOverview({ userName }: { userName: string }) {
       )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
+
+        {/* 近7日收入柱状图 */}
+        <Section title="近7日收入" description={wow.lastWeek > 0 ? `较上周 ${wow.thisWeek >= wow.lastWeek ? "+" : ""}${Math.round((wow.thisWeek - wow.lastWeek) / wow.lastWeek * 100)}%` : "首周数据"}>
+          <div className="flex items-end gap-1.5 h-24 mt-2">
+            {(() => {
+              const max = Math.max(...daily.map(d => d.cents), 1);
+              return daily.map((d) => (
+                <div key={d.date} className="flex flex-col items-center gap-1 flex-1">
+                  <div
+                    className="w-full rounded-t bg-primary/70 min-h-[2px] transition-all"
+                    style={{ height: `${Math.max(2, Math.round((d.cents / max) * 80))}px` }}
+                    title={formatYuan(d.cents)}
+                  />
+                  <span className="text-[9px] text-muted-foreground">{d.date}</span>
+                </div>
+              ));
+            })()}
+          </div>
+        </Section>
+
         <Section
           title="本周排行"
           description="按完成单量排序"

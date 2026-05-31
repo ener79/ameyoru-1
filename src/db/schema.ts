@@ -324,3 +324,26 @@ export const announcement = mysqlTable(
 );
 
 export type AnnouncementType = "NOTICE" | "ACTIVITY";
+
+/* ----------------------------- 操作日志 ----------------------------- */
+
+export const auditLog = mysqlTable(
+  "audit_log",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    actorId: varchar("actor_id", { length: ID_LEN }).notNull(),
+    actorName: varchar("actor_name", { length: 64 }).notNull(),
+    action: varchar("action", { length: 50 }).notNull(),
+    targetType: varchar("target_type", { length: 30 }).notNull(),
+    targetId: varchar("target_id", { length: ID_LEN }),
+    detail: text("detail"),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [
+    index("audit_log_actor_idx").on(t.actorId, t.createdAt),
+    index("audit_log_target_idx").on(t.targetType, t.targetId),
+    index("audit_log_created_idx").on(t.createdAt),
+  ]
+);

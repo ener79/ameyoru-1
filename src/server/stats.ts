@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, desc, count, sum, sql } from "drizzle-orm";
+import { and, eq, gte, lte, desc, count, sum, sql, or, like } from "drizzle-orm";
 import { db } from "@/db";
 import { order, user, customer } from "@/db/schema";
 import { rangeOf, type RangeKey } from "@/lib/date-range";
@@ -219,7 +219,8 @@ export async function leaderboard(range: RangeKey): Promise<LeaderboardRow[]> {
   }));
 }
 
-export async function customerSummary() {
+export async function customerSummary(opts: { q?: string } = {}) {
+  const { q } = opts;
   const completedPayable = sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' then ${order.payableCents} else 0 end), 0)`;
   const rows = await db
     .select({
@@ -241,6 +242,7 @@ export async function customerSummary() {
     })
     .from(customer)
     .leftJoin(order, eq(order.customerId, customer.id))
+    .where(q ? or(like(customer.name, `%${q}%`), like(customer.memberNo, `%${q}%`), like(customer.wechat, `%${q}%`)) : undefined)
     .groupBy(customer.id)
     .orderBy(desc(completedPayable), desc(customer.createdAt));
 
@@ -280,4 +282,43 @@ export async function recentOrders(opts: { playerId?: string; limit?: number }) 
     .orderBy(desc(order.startAt))
     .limit(opts.limit ?? 8);
   return rows;
+}
+
+export async function dailyRevenue(days: number): Promise<{ date: string; cents: number }[]> {
+  const results: { date: string; cents: number }[] = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+    const to = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    const [row] = await db
+      .select({ s: sum(order.payableCents).mapWith(Number) })
+      .from(order)
+      .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, from), lte(order.startAt, to)));
+    results.push({
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      cents: row?.s ?? 0,
+    });
+  }
+  return results;
+}
+
+export async function weekOverWeekRevenue(): Promise<{ thisWeek: number; lastWeek: number }> {
+  const now = new Date();
+  const dayOfWeek = now.getDay() || 7;
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() - dayOfWeek + 1);
+  thisMonday.setHours(0, 0, 0, 0);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(thisMonday.getDate() - 7);
+  const lastSunday = new Date(thisMonday);
+  lastSunday.setMilliseconds(-1);
+
+  const [thisW] = await db.select({ s: sum(order.payableCents).mapWith(Number) }).from(order)
+    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, thisMonday)));
+  const [lastW] = await db.select({ s: sum(order.payableCents).mapWith(Number) }).from(order)
+    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, lastMonday), lte(order.startAt, lastSunday)));
+
+  return { thisWeek: thisW?.s ?? 0, lastWeek: lastW?.s ?? 0 };
 }

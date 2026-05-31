@@ -44,6 +44,7 @@ const exactMatchPaths = new Set([
   "/payouts",
   "/profile",
   "/announcements",
+  "/audit-log",
 ]);
 
 function isActive(pathname: string, href: string) {

@@ -108,17 +108,45 @@ export function CustomersList({
   customers: CustomerRow[];
   players: PlayerOption[];
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [editing, setEditing] = useState<CustomerRow | null>(null);
   const [depositing, setDepositing] = useState<CustomerRow | null>(null);
   const [deducting, setDeducting] = useState<CustomerRow | null>(null);
   const [merging, setMerging] = useState<CustomerRow | null>(null);
   const [deleting, setDeleting] = useState<CustomerRow | null>(null);
   const [ledgerCustomer, setLedgerCustomer] = useState<CustomerRow | null>(null);
+
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.memberNo.toLowerCase().includes(q) ||
+        (c.wechat ?? "").toLowerCase().includes(q)
+    );
+  }, [customers, searchQuery]);
+
   return (
     <>
+      <div className="mb-4">
+        <Input
+          placeholder="搜索客户名、会员号、微信…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-xs"
+        />
+        {searchQuery && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            显示 {filteredCustomers.length} / {customers.length} 位客户
+          </p>
+        )}
+      </div>
       <Card className="overflow-hidden p-0">
         <ul className="divide-y">
-          {customers.map((c, i) => (
+          {filteredCustomers.length === 0 ? (
+            <li className="px-4 py-8 text-center text-sm text-muted-foreground">没有匹配的客户</li>
+          ) : filteredCustomers.map((c, i) => (
             <li
               key={c.id}
               className="flex flex-col gap-3 px-4 py-3 hover:bg-accent/40 sm:flex-row sm:items-center"

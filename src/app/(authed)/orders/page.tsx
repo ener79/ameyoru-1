@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, aliasedTable, sql } from "drizzle-orm";
+import { desc, eq, aliasedTable, sql, and, gte, lte, count } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import { db } from "@/db";
 import { order, user, customer } from "@/db/schema";
@@ -7,64 +7,163 @@ import { requireSession } from "@/lib/auth-helpers";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { OrdersList } from "./orders-list";
+import { Pagination } from "@/components/pagination";
+import { OrdersFilterBar } from "./orders-filter-bar";
+
+const PAGE_SIZE = 50;
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{
+    id?: string;
+    q?: string;
+    tab?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: string;
+  }>;
 }) {
   const { user: me } = await requireSession();
-  const { id: initialOpenId } = await searchParams;
+  const params = await searchParams;
+  const initialOpenId = params.id ?? null;
   const isManager = me.role === "BOSS" || me.role === "STAFF";
+
+  const q = params.q?.trim() ?? "";
+  const tab = params.tab ?? "PENDING_SETTLE";
+  const dateFrom = params.dateFrom ?? "";
+  const dateTo = params.dateTo ?? "";
+  const page = Math.max(1, parseInt(params.page ?? "1") || 1);
 
   const dispatcherUser = aliasedTable(user, "dispatcher");
 
-  const rows = await db
-    .select({
-      id: order.id,
-      playerId: order.playerId,
-      playerName: user.name,
-      // 陪玩自己看不到自己订单里的码(去 profile 看),只在管理者端显示
-      playerWechatQrPath: isManager
-        ? user.wechatQrPath
-        : sql<string | null>`NULL`.as("player_wechat_qr"),
-      playerAlipayQrPath: isManager
-        ? user.alipayQrPath
-        : sql<string | null>`NULL`.as("player_alipay_qr"),
-      dispatcherId: order.dispatcherId,
-      dispatcherName: dispatcherUser.name,
-      customerName: customer.name,
-      customerMemberNo: customer.memberNo,
-      customerWechat: isManager
-        ? customer.wechat
-        : sql<string | null>`NULL`.as("customer_wechat"),
-      startAt: order.startAt,
-      durationMin: order.durationMin,
-      hourlyRateCents: order.hourlyRateCents,
-      originalCents: order.originalCents,
-      discountCents: order.discountCents,
-      payableCents: order.payableCents,
-      prepayUsedCents: order.prepayUsedCents,
-      commissionCents: order.commissionCents,
-      playerEarnCents: order.playerEarnCents,
-      orderStatus: order.orderStatus,
-      settleStatus: order.settleStatus,
-      completedAt: order.completedAt,
-      canceledAt: order.canceledAt,
-      settledAt: order.settledAt,
-      paidMethod: order.paidMethod,
-      note: order.note,
-      cancelFault: order.cancelFault,
-      cancelNote: order.cancelNote,
-      playerCompensationCents: order.playerCompensationCents,
-    })
+  // Build WHERE conditions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions: any[] = [];
+
+  // Player can only see their own orders
+  if (me.role === "PLAYER") {
+    conditions.push(eq(order.playerId, me.id));
+  }
+
+  // Tab filter (server-side)
+  if (tab === "IN_PROGRESS") {
+    conditions.push(eq(order.orderStatus, "IN_PROGRESS"));
+  } else if (tab === "PENDING_SETTLE") {
+    conditions.push(eq(order.settleStatus, "UNSETTLED"));
+    // Only COMPLETED or CANCELED orders can be pending settlement
+    // We filter with two conditions: not IN_PROGRESS basically
+    // Use a raw SQL condition to avoid type issues with or()
+    conditions.push(sql`(${order.orderStatus} = 'COMPLETED' OR ${order.orderStatus} = 'CANCELED')` as any);
+  } else if (tab === "SETTLED") {
+    conditions.push(eq(order.settleStatus, "SETTLED"));
+  }
+  // "all" = no extra filter
+
+  // Date range filter
+  if (dateFrom) {
+    conditions.push(gte(order.startAt, new Date(dateFrom)));
+  }
+  if (dateTo) {
+    const toDate = new Date(dateTo);
+    toDate.setHours(23, 59, 59, 999);
+    conditions.push(lte(order.startAt, toDate));
+  }
+
+  // Search (needs join context — filter after join via subquery approach)
+  // We'll use the full query with search applied via customer name / player name
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // For counting total (with search)
+  const selectFields = {
+    id: order.id,
+    playerId: order.playerId,
+    playerName: user.name,
+    playerWechatQrPath: isManager
+      ? user.wechatQrPath
+      : sql<string | null>`NULL`.as("player_wechat_qr"),
+    playerAlipayQrPath: isManager
+      ? user.alipayQrPath
+      : sql<string | null>`NULL`.as("player_alipay_qr"),
+    dispatcherId: order.dispatcherId,
+    dispatcherName: dispatcherUser.name,
+    customerName: customer.name,
+    customerMemberNo: customer.memberNo,
+    customerWechat: isManager
+      ? customer.wechat
+      : sql<string | null>`NULL`.as("customer_wechat"),
+    startAt: order.startAt,
+    durationMin: order.durationMin,
+    hourlyRateCents: order.hourlyRateCents,
+    originalCents: order.originalCents,
+    discountCents: order.discountCents,
+    payableCents: order.payableCents,
+    prepayUsedCents: order.prepayUsedCents,
+    commissionCents: order.commissionCents,
+    playerEarnCents: order.playerEarnCents,
+    orderStatus: order.orderStatus,
+    settleStatus: order.settleStatus,
+    completedAt: order.completedAt,
+    canceledAt: order.canceledAt,
+    settledAt: order.settledAt,
+    paidMethod: order.paidMethod,
+    note: order.note,
+    cancelFault: order.cancelFault,
+    cancelNote: order.cancelNote,
+    playerCompensationCents: order.playerCompensationCents,
+  };
+
+  // Build base query with joins
+  const baseQuery = db
+    .select(selectFields)
     .from(order)
     .innerJoin(user, eq(user.id, order.playerId))
     .innerJoin(dispatcherUser, eq(dispatcherUser.id, order.dispatcherId))
     .innerJoin(customer, eq(customer.id, order.customerId))
-    .where(me.role === "PLAYER" ? eq(order.playerId, me.id) : undefined)
-    .orderBy(desc(order.startAt))
-    .limit(300);
+    .where(whereClause)
+    .orderBy(desc(order.startAt));
+
+  // Apply search filter + pagination
+  const offset = (page - 1) * PAGE_SIZE;
+
+  let rows;
+  let total: number;
+
+  if (q) {
+    // Get all matching then filter by search (drizzle MySQL LIKE on joined cols)
+    const allRows = await baseQuery;
+    const qLower = q.toLowerCase();
+    const filtered = allRows.filter(
+      (r) =>
+        r.customerName.toLowerCase().includes(qLower) ||
+        r.playerName.toLowerCase().includes(qLower) ||
+        r.customerMemberNo.toLowerCase().includes(qLower)
+    );
+    total = filtered.length;
+    rows = filtered.slice(offset, offset + PAGE_SIZE);
+  } else {
+    // Count query
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(order)
+      .innerJoin(user, eq(user.id, order.playerId))
+      .innerJoin(dispatcherUser, eq(dispatcherUser.id, order.dispatcherId))
+      .innerJoin(customer, eq(customer.id, order.customerId))
+      .where(whereClause);
+    total = countResult?.count ?? 0;
+
+    rows = await baseQuery.limit(PAGE_SIZE).offset(offset);
+  }
+
+  function buildUrl(p: number) {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (tab !== "PENDING_SETTLE") sp.set("tab", tab);
+    if (dateFrom) sp.set("dateFrom", dateFrom);
+    if (dateTo) sp.set("dateTo", dateTo);
+    if (p !== 1) sp.set("page", String(p));
+    return `/orders?${sp.toString()}`;
+  }
 
   return (
     <>
@@ -72,16 +171,32 @@ export default async function OrdersPage({
         title={me.role === "PLAYER" ? "我的订单" : "订单"}
         action={
           <Button asChild>
-            <Link href="/orders/new">
-              <Plus /> {isManager ? "派单" : "报单"}
-            </Link>
-          </Button>
+              <Link href="/orders/new">
+                <Plus /> {isManager ? "派单" : "报单"}
+              </Link>
+            </Button>
+            {isManager && (
+              <ExportCSVButton
+                label="导出"
+                onExport={() => exportOrdersCSV({ q, from: dateFrom, to: dateTo })}
+              />
+            )}
         }
       />
+
+      <OrdersFilterBar
+        q={q}
+        tab={tab}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        isManager={isManager}
+      />
+
       <OrdersList
         role={me.role}
         myId={me.id}
-        initialOpenId={initialOpenId ?? null}
+        initialOpenId={initialOpenId}
+        currentTab={tab}
         orders={rows.map((r) => ({
           ...r,
           startAt: r.startAt.toISOString(),
@@ -89,6 +204,13 @@ export default async function OrdersPage({
           canceledAt: r.canceledAt?.toISOString() ?? null,
           settledAt: r.settledAt?.toISOString() ?? null,
         }))}
+      />
+
+      <Pagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={total}
+        buildUrl={buildUrl}
       />
     </>
   );

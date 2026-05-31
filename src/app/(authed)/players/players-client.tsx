@@ -85,6 +85,8 @@ export function PlayersClient({
   players: Player[];
 }) {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showInactive, setShowInactive] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [securityCodePlayer, setSecurityCodePlayer] = useState<Player | null>(
@@ -95,13 +97,25 @@ export function PlayersClient({
   );
   const [pending, startTransition] = useTransition();
 
+  const filteredPlayers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return players.filter((p) => {
+      if (!showInactive && !p.active) return false;
+      if (!q) return true;
+      return (
+        p.displayName.toLowerCase().includes(q) ||
+        p.username.toLowerCase().includes(q)
+      );
+    });
+  }, [players, searchQuery, showInactive]);
+
   const groupedPlayers = useMemo(
     () => ({
-      MALE: players.filter((p) => p.playerGender === "MALE"),
-      FEMALE: players.filter((p) => p.playerGender === "FEMALE"),
-      UNSET: players.filter((p) => !p.playerGender),
+      MALE: filteredPlayers.filter((p) => p.playerGender === "MALE"),
+      FEMALE: filteredPlayers.filter((p) => p.playerGender === "FEMALE"),
+      UNSET: filteredPlayers.filter((p) => !p.playerGender),
     }),
-    [players]
+    [filteredPlayers]
   );
 
   function handleToggle(p: Player) {
@@ -138,25 +152,43 @@ export function PlayersClient({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          共 {players.length} 位陪玩,
-          {players.filter((p) => p.active).length} 位活跃
-        </div>
-        {canManage && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus /> 新建陪玩
+      <div className="mb-4 space-y-3">
+        <div className="flex gap-2">
+          <Input
+            placeholder="搜索名字或用户名…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-xs"
+          />
+          <Button
+            variant={showInactive ? "outline" : "default"}
+            size="sm"
+            onClick={() => setShowInactive(!showInactive)}
+          >
+            {showInactive ? "显示全部" : "仅显示活跃"}
           </Button>
-        )}
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {filteredPlayers.length === players.length
+              ? `共 ${players.length} 位陪玩，${players.filter((p) => p.active).length} 位活跃`
+              : `显示 ${filteredPlayers.length} / ${players.length} 位`}
+          </div>
+          {canManage && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus /> 新建陪玩
+            </Button>
+          )}
+        </div>
       </div>
 
-      {players.length === 0 ? (
+      {filteredPlayers.length === 0 ? (
         <EmptyState
           icon={<Plus />}
-          title="还没有陪玩"
-          description={canManage ? "点击「新建陪玩」开始" : undefined}
+          title={searchQuery ? "没有匹配的陪玩" : "还没有陪玩"}
+          description={!searchQuery && canManage ? "点击「新建陪玩」开始" : undefined}
           action={
-            canManage ? (
+            !searchQuery && canManage ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus /> 新建陪玩
               </Button>
