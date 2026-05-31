@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { announcement } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { nanoid } from "../id";
+import { logAudit } from "@/server/audit";
 
 const upsertSchema = z.object({
   id: z.string().optional(),
@@ -56,6 +57,7 @@ export async function upsertAnnouncementAction(input: UpsertAnnouncementInput) {
       createdById: me.id,
     });
   }
+  logAudit({ actorId: me.id, actorName: me.name, action: d.id ? "UPDATE_ANNOUNCEMENT" : "CREATE_ANNOUNCEMENT", targetType: "announcement", targetId: d.id, detail: { title: d.title, type: d.type } });
   invalidate();
   return { ok: true as const };
 }
@@ -68,8 +70,9 @@ export async function toggleAnnouncementAction(input: { id: string; enabled: boo
 }
 
 export async function deleteAnnouncementAction(input: { id: string }) {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
   await db.delete(announcement).where(eq(announcement.id, input.id));
+  logAudit({ actorId: me.id, actorName: me.name, action: "DELETE_ANNOUNCEMENT", targetType: "announcement", targetId: input.id });
   invalidate();
   return { ok: true as const };
 }

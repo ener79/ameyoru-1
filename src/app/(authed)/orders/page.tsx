@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/page-header";
 import { OrdersList } from "./orders-list";
 import { Pagination } from "@/components/pagination";
 import { OrdersFilterBar } from "./orders-filter-bar";
+import { ExportCSVButton } from "@/components/export-csv-button";
+import { exportOrdersCSV } from "@/server/actions/export";
 
 const PAGE_SIZE = 50;
 
@@ -54,7 +56,7 @@ export default async function OrdersPage({
     // Only COMPLETED or CANCELED orders can be pending settlement
     // We filter with two conditions: not IN_PROGRESS basically
     // Use a raw SQL condition to avoid type issues with or()
-    conditions.push(sql`(${order.orderStatus} = 'COMPLETED' OR ${order.orderStatus} = 'CANCELED')` as any);
+    conditions.push(sql`(${order.orderStatus} = 'COMPLETED' OR ${order.orderStatus} = 'CANCELED')` as ReturnType<typeof eq>);
   } else if (tab === "SETTLED") {
     conditions.push(eq(order.settleStatus, "SETTLED"));
   }
@@ -170,7 +172,8 @@ export default async function OrdersPage({
       <PageHeader
         title={me.role === "PLAYER" ? "我的订单" : "订单"}
         action={
-          <Button asChild>
+          <div className="flex items-center gap-2">
+            <Button asChild>
               <Link href="/orders/new">
                 <Plus /> {isManager ? "派单" : "报单"}
               </Link>
@@ -178,9 +181,10 @@ export default async function OrdersPage({
             {isManager && (
               <ExportCSVButton
                 label="导出"
-                onExport={() => exportOrdersCSV({ q, from: dateFrom, to: dateTo })}
+                onExport={() => exportOrdersCSV({ q, dateFrom, dateTo })}
               />
             )}
+          </div>
         }
       />
 

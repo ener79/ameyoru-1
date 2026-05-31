@@ -14,10 +14,10 @@ function toCSV(headers: string[], rows: string[][]): string {
 export async function exportOrdersCSV(opts: {
   q?: string;
   status?: string;
-  from?: string;
-  to?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: _me } = await requireSession({ role: ["BOSS", "STAFF"] });
 
   const dispatcherUser = aliasedTable(user, "dispatcher");
   const conditions: ReturnType<typeof eq>[] = [];
@@ -35,8 +35,8 @@ export async function exportOrdersCSV(opts: {
   if (opts.status === "COMPLETED") conditions.push(eq(order.orderStatus, "COMPLETED"));
   if (opts.status === "CANCELED") conditions.push(eq(order.orderStatus, "CANCELED"));
   if (opts.status === "UNSETTLED") conditions.push(eq(order.settleStatus, "UNSETTLED"));
-  if (opts.from) conditions.push(gte(order.startAt, new Date(opts.from)));
-  if (opts.to) conditions.push(lte(order.startAt, new Date(opts.to + "T23:59:59")));
+  if (opts.dateFrom) conditions.push(gte(order.startAt, new Date(opts.dateFrom)));
+  if (opts.dateTo) conditions.push(lte(order.startAt, new Date(opts.dateTo + "T23:59:59")));
 
   const rows = await db
     .select({

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { logAudit } from "@/server/audit";
 import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -177,7 +178,7 @@ async function createUser(opts: {
 export async function createPlayerAction(
   input: z.infer<typeof createPlayerSchema>
 ): Promise<CreateResult> {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
   const parsed = createPlayerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? "参数错误" };
@@ -194,6 +195,7 @@ export async function createPlayerAction(
     playerGender,
   });
   if (res.ok) {
+    logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_PLAYER", targetType: "user", detail: { username, displayName } });
     revalidatePath("/players");
     revalidatePath("/leaderboard");
   }
@@ -280,6 +282,7 @@ export async function toggleUserActiveAction(input: {
     .update(user)
     .set({ active: input.active })
     .where(eq(user.id, input.id));
+  logAudit({ actorId: me.id, actorName: me.name, action: input.active ? "ENABLE_USER" : "DISABLE_USER", targetType: "user", targetId: input.id });
   revalidatePath("/players");
   revalidatePath("/staff");
   return { ok: true as const };
