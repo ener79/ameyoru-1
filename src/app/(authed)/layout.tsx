@@ -10,6 +10,7 @@ const bossNav: NavItem[] = [
   { href: "/staff", label: "员工" },
   { href: "/customers", label: "客户" },
   { href: "/leaderboard", label: "排行榜" },
+  { href: "/announcements", label: "公告" },
 ];
 
 const staffNav: NavItem[] = [
@@ -20,6 +21,7 @@ const staffNav: NavItem[] = [
   { href: "/staff", label: "员工" },
   { href: "/customers", label: "客户" },
   { href: "/leaderboard", label: "排行榜" },
+  { href: "/announcements", label: "公告" },
 ];
 
 const playerNav: NavItem[] = [

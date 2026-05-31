@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, KeyRound, Menu, UserCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -42,6 +43,7 @@ const exactMatchPaths = new Set([
   "/leaderboard",
   "/payouts",
   "/profile",
+  "/announcements",
 ]);
 
 function isActive(pathname: string, href: string) {
@@ -94,11 +96,9 @@ export function AppNav({ items, user }: AppNavProps) {
         </DropdownMenu>
 
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="flex h-7 items-center justify-center rounded-lg bg-primary px-1.5 text-primary-foreground text-xs font-bold">
-            起点
-          </div>
+          <Image src="/logo.png" alt="起点乱斗" width={28} height={28} className="rounded-lg" />
           <span className="hidden text-sm font-semibold tracking-tight sm:inline">
-            起点电竞
+            <span className="font-black italic">起点</span><span className="font-black italic text-red-500">乱斗</span>
           </span>
         </Link>
 

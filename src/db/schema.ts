@@ -300,3 +300,27 @@ export type CustomerBalanceTxnType =
   | "ORDER_DEBIT"
   | "ORDER_REFUND"
   | "MANUAL_DEDUCT";
+
+/* ----------------------------- 公告 & 活动 ----------------------------- */
+
+export const announcement = mysqlTable(
+  "announcement",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    type: mysqlEnum("type", ["NOTICE", "ACTIVITY"]).notNull().default("NOTICE"),
+    title: varchar("title", { length: 100 }).notNull(),
+    content: text("content"),
+    isPermanent: boolean("is_permanent").notNull().default(false),
+    startAt: ts("start_at"),
+    endAt: ts("end_at"),
+    sortOrder: int("sort_order").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    createdById: varchar("created_by_id", { length: ID_LEN }).notNull(),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [index("idx_announcement_enabled").on(t.enabled, t.sortOrder)]
+);
+
+export type AnnouncementType = "NOTICE" | "ACTIVITY";
