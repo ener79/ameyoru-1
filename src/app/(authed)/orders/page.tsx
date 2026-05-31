@@ -9,8 +9,6 @@ import { PageHeader } from "@/components/page-header";
 import { OrdersList } from "./orders-list";
 import { Pagination } from "@/components/pagination";
 import { OrdersFilterBar } from "./orders-filter-bar";
-import { ExportCSVButton } from "@/components/export-csv-button";
-import { exportOrdersCSV } from "@/server/actions/export";
 
 const PAGE_SIZE = 50;
 
@@ -158,15 +156,12 @@ export default async function OrdersPage({
     .limit(PAGE_SIZE)
     .offset(offset);
 
-  function buildUrl(p: number) {
-    const sp = new URLSearchParams();
-    if (q) sp.set("q", q);
-    if (tab !== "PENDING_SETTLE") sp.set("tab", tab);
-    if (dateFrom) sp.set("dateFrom", dateFrom);
-    if (dateTo) sp.set("dateTo", dateTo);
-    if (p !== 1) sp.set("page", String(p));
-    return `/orders?${sp.toString()}`;
-  }
+  const baseParams = new URLSearchParams();
+  if (q) baseParams.set("q", q);
+  if (tab !== "PENDING_SETTLE") baseParams.set("tab", tab);
+  if (dateFrom) baseParams.set("dateFrom", dateFrom);
+  if (dateTo) baseParams.set("dateTo", dateTo);
+  const baseHref = `/orders?${baseParams.toString()}`;
 
   return (
     <>
@@ -179,12 +174,6 @@ export default async function OrdersPage({
                 <Plus /> {isManager ? "派单" : "报单"}
               </Link>
             </Button>
-            {isManager && (
-              <ExportCSVButton
-                label="导出"
-                onExport={() => exportOrdersCSV({ q, dateFrom, dateTo })}
-              />
-            )}
           </div>
         }
       />
@@ -202,6 +191,9 @@ export default async function OrdersPage({
         myId={me.id}
         initialOpenId={initialOpenId}
         currentTab={tab}
+        searchQuery={q}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
         orders={rows.map((r) => ({
           ...r,
           startAt: r.startAt.toISOString(),
@@ -215,7 +207,7 @@ export default async function OrdersPage({
         page={page}
         pageSize={PAGE_SIZE}
         total={total}
-        buildUrl={buildUrl}
+        baseHref={baseHref}
       />
     </>
   );

@@ -9,12 +9,12 @@ export function Pagination({
   page,
   total,
   pageSize,
-  buildUrl,
+  baseHref,
 }: {
   page: number;
   total: number;
   pageSize: number;
-  buildUrl: (p: number) => string;
+  baseHref: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -23,7 +23,8 @@ export function Pagination({
   if (totalPages <= 1) return null;
 
   function goTo(p: number) {
-    startTransition(() => router.push(buildUrl(p)));
+    const sep = baseHref.includes("?") ? "&" : "?";
+    startTransition(() => router.push(`${baseHref}${sep}page=${p}`));
   }
 
   return (

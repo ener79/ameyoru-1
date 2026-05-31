@@ -293,20 +293,24 @@ function PlayerPriceSection({
         <h2 className="text-base font-semibold">{title}</h2>
         <Badge variant="secondary">{players.length} 人</Badge>
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {buckets.map((priceBucket) => (
-          <PriceBucket
-            key={priceBucket}
-            priceBucket={priceBucket}
-            players={players.filter((p) => p.defaultRateCents === priceBucket)}
-            canManage={canManage}
-            pending={pending}
-            onEdit={onEdit}
-            onResetSecurityCode={onResetSecurityCode}
-            onReset={onReset}
-            onToggle={onToggle}
-          />
-        ))}
+      <div className="space-y-4">
+        {buckets.map((priceBucket) => {
+          const bp = players.filter((p) => p.defaultRateCents === priceBucket);
+          if (bp.length === 0) return null;
+          return (
+            <PriceBucket
+              key={priceBucket}
+              priceBucket={priceBucket}
+              players={bp}
+              canManage={canManage}
+              pending={pending}
+              onEdit={onEdit}
+              onResetSecurityCode={onResetSecurityCode}
+              onReset={onReset}
+              onToggle={onToggle}
+            />
+          );
+        })}
         {otherPlayers.length > 0 && (
           <PriceBucket
             label="其他"
@@ -360,7 +364,7 @@ function PriceBucket({
       {players.length === 0 ? (
         <div className="px-4 py-5 text-sm text-muted-foreground">暂无</div>
       ) : (
-        <ul className="divide-y">
+        <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 divide-y sm:divide-y-0">
           {players.map((p) => (
             <PlayerRow
               key={p.id}
@@ -373,7 +377,7 @@ function PriceBucket({
               onToggle={onToggle}
             />
           ))}
-        </ul>
+        </div>
       )}
     </Card>
   );

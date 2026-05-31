@@ -14,6 +14,8 @@ import {
   Tag,
   XCircle,
 } from "lucide-react";
+import { ExportCSVButton } from "@/components/export-csv-button";
+import { exportOrdersCSV } from "@/server/actions/export";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -120,14 +122,24 @@ export function OrdersList({
   orders,
   initialOpenId,
   currentTab,
+  searchQuery,
+  dateFrom,
+  dateTo,
 }: {
   role: Role;
   myId: string;
   orders: OrderRow[];
   initialOpenId?: string | null;
   currentTab?: string;
+  searchQuery?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
   const canManage = role === "BOSS" || role === "STAFF";
+
+  function handleExportCSV() {
+    return exportOrdersCSV({ q: searchQuery, dateFrom, dateTo });
+  }
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -179,6 +191,7 @@ export function OrdersList({
               <CheckSquare className="size-4" /> 全部结算
             </Button>
           )}
+          {canManage && <ExportCSVButton label="导出" onExport={handleExportCSV} />}
           <div className="text-xs text-muted-foreground">
             {totals.count} 单 ·{" "}
             <span className="font-mono tabular-nums text-foreground">
@@ -347,6 +360,7 @@ function OrderDetailSheet({
   const [adjustOpen, setAdjustOpen] = useState(false);
 
   const canManage = role === "BOSS" || role === "STAFF";
+
   const hasDiscount = !!(order && order.discountCents > 0);
   const isCanceled = order?.orderStatus === "CANCELED";
   const payoutCents = order

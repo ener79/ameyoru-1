@@ -168,7 +168,7 @@ export function StaffClient({
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setInviteOpen(true)}>
+          <Button onClick={() => setInviteOpen(true)}>
             <Link2 /> 创建陪玩链接
           </Button>
           {isBoss && (
@@ -294,22 +294,87 @@ export function StaffClient({
 }
 
 function InviteList({ invites }: { invites: Invite[] }) {
+  const router = useRouter();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
   if (invites.length === 0) return null;
+
+  // Group by gender + rate, pick the newest active link per group
+  const now = Date.now();
+  const groups = new Map<string, { gender: string; rateCents: number; genderLabel: string; rateLabel: string; active: Invite | null; total: number; activeCount: number }>();
+
+  for (const inv of invites) {
+    const key = `${inv.playerGender ?? "ANY"}-${inv.defaultRateCents ?? 0}`;
+    if (!groups.has(key)) {
+      const gl = inv.playerGender === "MALE" ? "男陪" : inv.playerGender === "FEMALE" ? "女陪" : "不限";
+      const rl = inv.defaultRateCents ? formatYuan(inv.defaultRateCents) + "/h" : "未设单价";
+      groups.set(key, { gender: inv.playerGender ?? "ANY", rateCents: inv.defaultRateCents ?? 0, genderLabel: gl, rateLabel: rl, active: null, total: 0, activeCount: 0 });
+    }
+    const g = groups.get(key)!;
+    g.total++;
+    const expired = new Date(inv.expiresAt).getTime() < now;
+    const exhausted = inv.maxUses > 0 && inv.useCount >= inv.maxUses;
+    if (!expired && !exhausted) {
+      g.activeCount++;
+      if (!g.active || new Date(inv.createdAt) > new Date(g.active.createdAt)) {
+        g.active = inv;
+      }
+    }
+  }
+
+  const sorted = [...groups.values()].sort((a, b) => {
+    if (a.gender !== b.gender) return a.gender === "MALE" ? -1 : 1;
+    return a.rateCents - b.rateCents;
+  });
+
+  async function copyLink(inv: Invite) {
+    const link = `${window.location.origin}/player-invite/${inv.inviteToken}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(inv.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      toast.error("复制失败");
+    }
+  }
+
   return (
     <Card className="mb-4 overflow-hidden p-0">
-      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2">
+      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
         <span className="text-xs font-medium text-muted-foreground">
-          陪玩邀请链接 · {invites.length}
+          陪玩邀请链接
         </span>
         <span className="text-xs text-muted-foreground">
-          复制链接发给陪玩,他们打开后自助注册
+          每个档位一条链接，复制发给陪玩即可注册
         </span>
       </div>
-      <ul className="divide-y">
-        {invites.map((inv) => (
-          <InviteRow key={inv.id} invite={inv} />
+      <div className="divide-y">
+        {sorted.map((g) => (
+          <div key={`${g.gender}-${g.rateCents}`} className="flex items-center gap-3 px-4 py-3">
+            <Badge variant={g.gender === "MALE" ? "secondary" : "default"} className="w-12 justify-center">
+              {g.genderLabel}
+            </Badge>
+            <span className="font-mono text-sm font-semibold w-16">{g.rateLabel}</span>
+            <div className="flex-1 text-xs text-muted-foreground">
+              {g.activeCount > 0 ? `${g.activeCount} 条可用` : "无可用链接"}
+              {g.total > g.activeCount && ` · ${g.total - g.activeCount} 条已失效`}
+            </div>
+            {g.active ? (
+              <Button
+                size="sm"
+                variant={copiedId === g.active.id ? "default" : "outline"}
+                onClick={() => copyLink(g.active!)}
+                className="gap-1"
+              >
+                {copiedId === g.active.id ? <><Check className="size-3" /> 已复制</> : <><Copy className="size-3" /> 复制链接</>}
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">需新建</span>
+            )}
+          </div>
         ))}
-      </ul>
+      </div>
     </Card>
   );
 }

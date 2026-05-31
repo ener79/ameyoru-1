@@ -27,10 +27,15 @@ export async function ManagerOverview({ userName }: { userName: string }) {
     weekOverWeekRevenue(),
   ]);
 
+  const wowPct = wow.lastWeek > 0
+    ? `${wow.thisWeek >= wow.lastWeek ? "↑" : "↓"} ${Math.abs(Math.round((wow.thisWeek - wow.lastWeek) / wow.lastWeek * 100))}%`
+    : "";
+
   return (
     <>
       <PageHeader title={`你好,${userName}`} description="店铺总览" />
 
+      {/* KPI 卡片 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
           label="今日完成"
@@ -43,7 +48,7 @@ export async function ManagerOverview({ userName }: { userName: string }) {
           hint={`${week.orderCount} 单`}
           emphasis
         />
-        <KpiCard label="本周店铺抽成" value={formatYuan(week.commissionCents)} />
+        <KpiCard label="本周抽成" value={formatYuan(week.commissionCents)} />
         <KpiCard
           label="未结订单"
           value={today.pendingCount}
@@ -66,27 +71,58 @@ export async function ManagerOverview({ userName }: { userName: string }) {
         </div>
       )}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      {/* 近7日收入 — 全宽，柱形图+数字+平均线+汇总 */}
+      <div className="mt-6">
+        <Section title="近7日收入" description={wowPct ? `较上周 ${wowPct}` : "首周数据"}>
+          {(() => {
+            const max = Math.max(...daily.map(d => d.cents), 1);
+            const totalCents = daily.reduce((s, d) => s + d.cents, 0);
+            const avgCents = Math.round(totalCents / (daily.length || 1));
+            const avgPct = max > 0 ? Math.round((avgCents / max) * 100) : 0;
+            const weekdays = ["周日","周一","周二","周三","周四","周五","周六"];
+            // figure out day-of-week for each date
+            const now = new Date();
 
-        {/* 近7日收入柱状图 */}
-        <Section title="近7日收入" description={wow.lastWeek > 0 ? `较上周 ${wow.thisWeek >= wow.lastWeek ? "+" : ""}${Math.round((wow.thisWeek - wow.lastWeek) / wow.lastWeek * 100)}%` : "首周数据"}>
-          <div className="flex items-end gap-1.5 h-24 mt-2">
-            {(() => {
-              const max = Math.max(...daily.map(d => d.cents), 1);
-              return daily.map((d) => (
-                <div key={d.date} className="flex flex-col items-center gap-1 flex-1">
-                  <div
-                    className="w-full rounded-t bg-primary/70 min-h-[2px] transition-all"
-                    style={{ height: `${Math.max(2, Math.round((d.cents / max) * 80))}px` }}
-                    title={formatYuan(d.cents)}
-                  />
-                  <span className="text-[9px] text-muted-foreground">{d.date}</span>
+            return (
+              <>
+                <div className="relative flex items-end gap-2 h-36 mt-3">
+
+                  {daily.map((d, i) => {
+                    
+                    const dayOffset = daily.length - 1 - i;
+                    const dayDate = new Date(now);
+                    dayDate.setDate(dayDate.getDate() - dayOffset);
+                    const weekday = weekdays[dayDate.getDay()];
+                    return (
+                      <div key={d.date} className="flex flex-col items-center gap-1 flex-1">
+                        <span className="text-[10px] font-mono tabular-nums text-foreground">
+                          {d.cents > 0 ? formatYuan(d.cents) : "-"}
+                        </span>
+                        <div
+                          className={"w-full rounded-t min-h-[4px] transition-all bg-primary"}
+                          style={{ height: `${Math.max(4, Math.round((d.cents / max) * 110))}px` }}
+                        />
+                        <div className="text-center">
+                          <div className="text-[9px] text-muted-foreground">{weekday}</div>
+                          <div className="text-[10px] text-muted-foreground">{d.date}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ));
-            })()}
-          </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+                  <span>本周合计 <span className="font-mono font-semibold text-foreground">{formatYuan(totalCents)}</span></span>
+                  <span>日均 <span className="font-mono font-semibold text-foreground">{formatYuan(avgCents)}</span></span>
+                  <span>最高 <span className="font-mono font-semibold text-foreground">{formatYuan(Math.max(...daily.map(d => d.cents)))}</span></span>
+                </div>
+              </>
+            );
+          })()}
         </Section>
+      </div>
 
+      {/* 本周排行 + 最新报单 — 大屏左右，小屏上下 */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Section
           title="本周排行"
           description="按完成单量排序"
@@ -165,8 +201,7 @@ export async function ManagerOverview({ userName }: { userName: string }) {
                       <div className="truncate text-sm font-medium">
                         <span>{o.playerName}</span>
                         <span className="text-muted-foreground">
-                          {" "}
-                          · {o.customerName}
+                          {" "}· {o.customerName}
                         </span>
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -189,7 +224,8 @@ export async function ManagerOverview({ userName }: { userName: string }) {
         </Section>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {/* 本月汇总 */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <KpiCard label="本月订单" value={month.orderCount} />
         <KpiCard label="本月流水" value={formatYuan(month.payableCents)} />
         <KpiCard label="本月抽成" value={formatYuan(month.commissionCents)} />
