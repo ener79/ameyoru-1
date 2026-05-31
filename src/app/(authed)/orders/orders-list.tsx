@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   CheckSquare,
-  Download,
+
   Inbox,
   Loader2,
   MessageCircle,
@@ -128,6 +128,7 @@ export function OrdersList({
   currentTab?: string;
 }) {
   const canManage = role === "BOSS" || role === "STAFF";
+  const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchMethod, setBatchMethod] = useState<"WECHAT" | "ALIPAY" | undefined>(undefined);
@@ -168,20 +169,6 @@ export function OrdersList({
     });
   }
 
-  function handleExport() {
-    startExportTransition(async () => {
-      const res = await exportOrdersCSV({});
-      if (!res.ok) return;
-      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("导出成功");
-    });
-  }
 
   return (
     <>
@@ -190,12 +177,6 @@ export function OrdersList({
           {canManage && currentTab === "PENDING_SETTLE" && filtered.some((o) => o.settleStatus === "UNSETTLED" && (o.orderStatus === "COMPLETED" || o.orderStatus === "CANCELED")) && (
             <Button size="sm" variant="outline" onClick={() => setBatchOpen(true)}>
               <CheckSquare className="size-4" /> 全部结算
-            </Button>
-          )}
-          {canManage && (
-            <Button size="sm" variant="outline" onClick={handleExport} disabled={exportPending}>
-              {exportPending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-              导出
             </Button>
           )}
           <div className="text-xs text-muted-foreground">
@@ -366,7 +347,6 @@ function OrderDetailSheet({
   const [adjustOpen, setAdjustOpen] = useState(false);
 
   const canManage = role === "BOSS" || role === "STAFF";
-  // canManage removed - same as canManage
   const hasDiscount = !!(order && order.discountCents > 0);
   const isCanceled = order?.orderStatus === "CANCELED";
   const payoutCents = order
@@ -621,7 +601,6 @@ function OrderDetailSheet({
               <ActionBar
                 order={order}
                 canManage={canManage}
-                canManage={canManage}
                 isOwnOrder={order.playerId === myId}
                 pending={pending}
                 onComplete={() =>
@@ -690,7 +669,6 @@ function OrderDetailSheet({
 function ActionBar({
   order,
   canManage,
-  canManage,
   isOwnOrder,
   pending,
   onComplete,
@@ -700,7 +678,6 @@ function ActionBar({
   onUnsettle,
 }: {
   order: OrderRow;
-  canManage: boolean;
   canManage: boolean;
   isOwnOrder: boolean;
   pending: boolean;
