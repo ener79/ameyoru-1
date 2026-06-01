@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   CheckSquare,
-
   Inbox,
+  ZoomIn,
   Loader2,
   MessageCircle,
   RotateCcw,
@@ -598,7 +598,7 @@ function OrderDetailSheet({
                     <div className="text-xs text-muted-foreground">
                       陪玩收款码
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-2 max-w-xs">
                       {order.playerWechatQrPath && (
                         <QrThumbnail
                           label="微信收款码"
@@ -838,18 +838,45 @@ function DetailRow({
 }
 
 function QrThumbnail({ label, path }: { label: string; path: string }) {
+  const [zoomOpen, setZoomOpen] = useState(false);
   return (
-    <div className="rounded-lg border bg-card p-2">
-      <div className="mb-1.5 text-center text-[11px] text-muted-foreground">
-        {label}
+    <>
+      <div className="rounded-lg border bg-card p-2">
+        <div className="mb-1.5 text-center text-[11px] text-muted-foreground">
+          {label}
+        </div>
+        <button
+          type="button"
+          onClick={() => setZoomOpen(true)}
+          className="relative block w-full overflow-hidden rounded cursor-zoom-in group"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/uploads/${path}`}
+            alt={label}
+            className="aspect-square w-full rounded object-contain"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors">
+            <ZoomIn className="size-6 text-white opacity-0 group-hover:opacity-90 transition-opacity" />
+          </div>
+        </button>
+        <p className="mt-1 text-center text-[10px] text-muted-foreground">点击放大扫码</p>
       </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/api/uploads/${path}`}
-        alt={label}
-        className="aspect-square w-full rounded object-contain"
-      />
-    </div>
+      <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
+        <DialogContent className="max-w-lg sm:max-w-md p-2">
+          <DialogHeader>
+            <DialogTitle>{label}</DialogTitle>
+            <DialogDescription>用手机扫码向陪玩打款</DialogDescription>
+          </DialogHeader>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/uploads/${path}`}
+            alt={label}
+            className="w-full object-contain rounded-lg"
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
