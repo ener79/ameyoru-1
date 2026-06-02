@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 export interface NavItem {
   href: string;
   label: string;
+  badge?: number;
 }
 
 export interface AppNavProps {
@@ -88,7 +89,12 @@ export function AppNav({ items, user }: AppNavProps) {
                     href={item.href}
                     className={cn(active && "bg-secondary font-medium")}
                   >
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && item.badge > 0 ? (
+                      <span className="ml-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                        {item.badge > 99 ? "99+" : item.badge}
+                      </span>
+                    ) : null}
                   </Link>
                 </DropdownMenuItem>
               );
@@ -119,13 +125,18 @@ export function AppNav({ items, user }: AppNavProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  "relative shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                   active
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
                 {item.label}
+                {item.badge && item.badge > 0 ? (
+                  <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

@@ -33,6 +33,9 @@ const ACTION_LABEL: Record<string, string> = {
   DELETE_PLAYER_INVITE: "删除邀请链接",
   ENABLE_ANNOUNCEMENT: "启用公告",
   DISABLE_ANNOUNCEMENT: "禁用公告",
+  CREATE_GIFT_RECORD: "添加礼物记录",
+  UPDATE_GIFT_RECORD: "修改礼物记录",
+  DELETE_GIFT_RECORD: "删除礼物记录",
 };
 
 const ACTION_COLOR: Record<string, string> = {
@@ -51,7 +54,6 @@ const ACTION_COLOR: Record<string, string> = {
   CREATE_PLAYER_INVITE: "创建邀请链接",
   DELETE_PLAYER_INVITE: "删除邀请链接",
   ENABLE_ANNOUNCEMENT: "启用公告",
-  DISABLE_ANNOUNCEMENT: "禁用公告",
 };
 
 export default async function AuditLogPage() {

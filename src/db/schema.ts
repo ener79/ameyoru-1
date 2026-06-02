@@ -58,6 +58,7 @@ export const user = mysqlTable("user", {
   alipayQrPath: varchar("alipay_qr_path", { length: 500 }),
   qrSecurityCodeHash: varchar("qr_security_code_hash", { length: 255 }),
   depositPaid: boolean("deposit_paid").notNull().default(false),
+  lastGiftSeenAt: ts("last_gift_seen_at"),
 });
 
 export const session = mysqlTable("session", {
@@ -346,5 +347,46 @@ export const auditLog = mysqlTable(
     index("audit_log_actor_idx").on(t.actorId, t.createdAt),
     index("audit_log_target_idx").on(t.targetType, t.targetId),
     index("audit_log_created_idx").on(t.createdAt),
+  ]
+);
+
+/* ----------------------------- 礼物打赏记录 ----------------------------- */
+
+/**
+ * 外部平台(抖音/直播/微信等)打赏礼物 → 老板内部转账给陪玩 → 此处仅做展示与抽成记账。
+ *
+ * 所有金额单位均为"分",与订单系统保持一致。
+ * 抽成比例存当时的快照(feeRateBp),后续调整不影响历史记录。
+ * giftTier 限制为 6 个固定档位(分),便于统计与防止误输。
+ */
+export const GIFT_TIER_CENTS = [6800, 12800, 25800, 52000, 131400, 520000] as const;
+export type GiftTierCents = (typeof GIFT_TIER_CENTS)[number];
+
+export const giftRecord = mysqlTable(
+  "gift_record",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    playerId: varchar("player_id", { length: ID_LEN })
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    giftTierCents: int("gift_tier_cents").notNull(),
+    quantity: int("quantity").notNull().default(1),
+    totalCents: int("total_cents").notNull(),
+    feeRateBp: int("fee_rate_bp").notNull(),
+    platformFeeCents: int("platform_fee_cents").notNull(),
+    playerEarnCents: int("player_earn_cents").notNull(),
+    senderNickname: varchar("sender_nickname", { length: 100 }).notNull(),
+    note: varchar("note", { length: 500 }),
+    operatorId: varchar("operator_id", { length: ID_LEN }).notNull(),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+    updatedAt: ts("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [
+    index("gift_record_player_idx").on(t.playerId, t.createdAt),
+    index("gift_record_created_idx").on(t.createdAt),
   ]
 );

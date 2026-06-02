@@ -27,3 +27,20 @@ export const INTERNAL_EMAIL_DOMAIN = "mo.local";
 
 /** 老板账号的默认用户名(seed 创建) */
 export const BOSS_USERNAME = "boss";
+
+/**
+ * 礼物打赏抽成比例(basis points,万分之),默认 15% = 1500/10000。
+ * 每条礼物记录会快照写入 GiftRecord.feeRateBp,
+ * 这样以后改全店设置时不会回溯影响历史记录。
+ */
+export const DEFAULT_GIFT_FEE_RATE_BP = 1500;
+
+/** 礼物档位的人类可读标签(用于按钮文案与日志详情)。 */
+export const GIFT_TIER_LABELS: Record<number, string> = {
+  6800: "68",
+  12800: "128",
+  25800: "258",
+  52000: "520",
+  131400: "1314",
+  520000: "5200",
+};
