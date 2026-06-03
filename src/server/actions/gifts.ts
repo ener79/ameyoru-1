@@ -539,8 +539,6 @@ export async function fetchAndMarkUnreadGifts() {
     .set({ lastGiftSeenAt: seenAt })
     .where(eq(user.id, me.id));
 
-  revalidatePath("/my-gifts", "layout");
-
   return rows.map((r) => ({
     ...r,
     createdAt: r.createdAt.toISOString(),

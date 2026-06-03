@@ -39,7 +39,6 @@ export default async function RootLayout({
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <head>{css && <style dangerouslySetInnerHTML={{ __html: css }} />}</head>
       <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
@@ -47,6 +46,7 @@ export default async function RootLayout({
           GeistMono.variable
         )}
       >
+        {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
         <ThemeProvider>
           <TooltipProvider>
             {children}
