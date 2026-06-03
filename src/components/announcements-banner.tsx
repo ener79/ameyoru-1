@@ -10,8 +10,7 @@ interface AnnouncementItem {
   type: "NOTICE" | "ACTIVITY";
   title: string;
   content: string | null;
-  contentJson: string | null;
-  imagePath: string | null;
+  contentHtml: string | null;
   isPermanent: boolean;
   endAt: string | null;
 }
@@ -45,10 +44,14 @@ export function AnnouncementsBanner({ items }: { items: AnnouncementItem[] }) {
                 </Badge>
               )}
             </div>
-            {item.imagePath && (
-              <img src={`/api/uploads/${item.imagePath}`} alt="" className="mt-2 rounded-md max-h-40 object-cover" />
+            {item.contentHtml ? (
+              <div
+                className="tiptap text-sm text-foreground/80 mt-1"
+                dangerouslySetInnerHTML={{ __html: item.contentHtml }}
+              />
+            ) : (
+              item.content && <p className="text-sm text-foreground/80 mt-1 whitespace-pre-wrap">{item.content}</p>
             )}
-            {item.content && <p className="text-sm text-foreground/80 mt-1 line-clamp-3">{item.content}</p>}
           </div>
         </Card>
       ))}

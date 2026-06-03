@@ -5,7 +5,6 @@ import { useEditor, EditorContent, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import ImageExt from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
 import {
   Bold,
   Heading2,
@@ -20,9 +19,15 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+export interface RichTextValue {
+  json: JSONContent;
+  html: string;
+  text: string;
+}
+
 interface Props {
   content: JSONContent | null;
-  onChange: (json: JSONContent) => void;
+  onChange: (value: RichTextValue) => void;
   placeholder?: string;
 }
 
@@ -32,20 +37,19 @@ export function RichTextEditor({ content, onChange, placeholder }: Props) {
       StarterKit.configure({
         heading: { levels: [2, 3] },
       }),
-      Underline,
       ImageExt.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({
         placeholder: placeholder ?? "输入公告内容…",
       }),
     ],
     content: content ?? undefined,
+    immediatelyRender: false,
     onUpdate: ({ editor: e }) => {
-      onChange(e.getJSON());
+      onChange({ json: e.getJSON(), html: e.getHTML(), text: e.getText() });
     },
     editorProps: {
       attributes: {
-        class:
-          "prose prose-sm max-w-none min-h-[120px] px-3 py-2 focus:outline-none dark:prose-invert",
+        class: "max-w-none min-h-[120px] px-3 py-2 focus:outline-none",
       },
     },
   });

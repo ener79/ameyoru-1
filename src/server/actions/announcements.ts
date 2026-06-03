@@ -15,7 +15,7 @@ const upsertSchema = z.object({
   title: z.string().min(1).max(100),
   content: z.string().max(5000).optional().nullable(),
   contentJson: z.string().max(100000).optional().nullable(),
-  imagePath: z.string().max(500).optional().nullable(),
+  contentHtml: z.string().max(100000).optional().nullable(),
   isPermanent: z.boolean().optional(),
   startAt: z.string().optional().nullable(),
   endAt: z.string().optional().nullable(),
@@ -23,6 +23,15 @@ const upsertSchema = z.object({
 });
 
 export type UpsertAnnouncementInput = z.input<typeof upsertSchema>;
+
+/** 富文本由可信后台编辑生成,这里再做一层防御性消毒 */
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
+}
 
 function invalidate() {
   revalidatePath("/overview");
@@ -40,7 +49,7 @@ export async function upsertAnnouncementAction(input: UpsertAnnouncementInput) {
     title: d.title,
     content: d.content ?? null,
     contentJson: d.contentJson ?? null,
-    imagePath: d.imagePath ?? null,
+    contentHtml: d.contentHtml ? sanitizeHtml(d.contentHtml) : null,
     isPermanent: d.isPermanent ?? false,
     startAt: d.startAt ? new Date(d.startAt) : null,
     endAt: d.endAt ? new Date(d.endAt) : null,

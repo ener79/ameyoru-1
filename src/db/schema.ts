@@ -313,7 +313,7 @@ export const announcement = mysqlTable(
     title: varchar("title", { length: 100 }).notNull(),
     content: text("content"),
     contentJson: text("content_json"),
-    imagePath: varchar("image_path", { length: 500 }),
+    contentHtml: text("content_html"),
     isPermanent: boolean("is_permanent").notNull().default(false),
     startAt: ts("start_at"),
     endAt: ts("end_at"),

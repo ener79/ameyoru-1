@@ -2,16 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { auth } from "@/lib/auth";
 import { readImageUpload } from "@/lib/image-upload";
+import { nanoid } from "@/server/id";
 
 const UPLOAD_ROOT = join(process.cwd(), "uploads");
 const MAX_BYTES = 10 * 1024 * 1024;
-
-function nanoid(len = 12) {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
-}
 
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });

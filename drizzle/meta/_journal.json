@@ -50,6 +50,13 @@
       "when": 1780672800000,
       "tag": "0006_border_radius",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1780759200000,
+      "tag": "0007_announcement_html",
+      "breakpoints": true
     }
   ]
 }

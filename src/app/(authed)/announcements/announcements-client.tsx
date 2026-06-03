@@ -23,13 +23,24 @@ interface Item {
   title: string;
   content: string | null;
   contentJson: string | null;
-  imagePath: string | null;
+  contentHtml: string | null;
   isPermanent: boolean;
   startAt: string | null;
   endAt: string | null;
   sortOrder: number;
   enabled: boolean;
   createdAt: string;
+}
+
+/** 旧公告只有纯文本时,用它初始化编辑器,避免编辑保存后内容丢失 */
+function textToDoc(text: string): JSONContent {
+  return {
+    type: "doc",
+    content: text.split("\n").map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : [],
+    })),
+  };
 }
 
 export function AnnouncementsClient({ items }: { items: Item[] }) {
@@ -39,22 +50,26 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   const [showForm, setShowForm] = useState(false);
 
   const [form, setForm] = useState<UpsertAnnouncementInput>({
-    type: "NOTICE", title: "", content: "", contentJson: null, imagePath: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
+    type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
   });
   const [editorJson, setEditorJson] = useState<JSONContent | null>(null);
 
   function openNew() {
     setEditItem(null);
     setEditorJson(null);
-    setForm({ type: "NOTICE", title: "", content: "", contentJson: null, imagePath: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0 });
+    setForm({ type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0 });
     setShowForm(true);
   }
 
   function openEdit(item: Item) {
     setEditItem(item);
-    const json = item.contentJson ? JSON.parse(item.contentJson) : null;
+    const json = item.contentJson
+      ? (JSON.parse(item.contentJson) as JSONContent)
+      : item.content
+      ? textToDoc(item.content)
+      : null;
     setEditorJson(json);
-    setForm({ id: item.id, type: item.type, title: item.title, content: item.content ?? "", contentJson: item.contentJson, imagePath: item.imagePath, isPermanent: item.isPermanent, startAt: item.startAt?.slice(0, 16) ?? null, endAt: item.endAt?.slice(0, 16) ?? null, sortOrder: item.sortOrder });
+    setForm({ id: item.id, type: item.type, title: item.title, content: item.content ?? "", contentJson: item.contentJson, contentHtml: item.contentHtml, isPermanent: item.isPermanent, startAt: item.startAt?.slice(0, 16) ?? null, endAt: item.endAt?.slice(0, 16) ?? null, sortOrder: item.sortOrder });
     setShowForm(true);
   }
 
@@ -140,9 +155,13 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
                 <RichTextEditor
                   key={editItem?.id ?? "new"}
                   content={editorJson}
-                  onChange={(json) => {
-                    setEditorJson(json);
-                    setForm((f) => ({ ...f, contentJson: JSON.stringify(json) }));
+                  onChange={({ json, html, text }) => {
+                    setForm((f) => ({
+                      ...f,
+                      contentJson: JSON.stringify(json),
+                      contentHtml: html,
+                      content: text,
+                    }));
                   }}
                 />
               </div>
