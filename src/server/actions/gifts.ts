@@ -413,8 +413,11 @@ export async function listPlayersForGift() {
 
 /* ----------------------------- 陪玩端 ----------------------------- */
 
-export async function getMyGiftRecords() {
+export async function getMyGiftRecords(opts: { tab?: "all" | "pending" | "settled"; limit?: number; offset?: number } = {}) {
   const { user: me } = await requireSession({ role: "PLAYER" });
+  const conds = [eq(giftRecord.playerId, me.id)];
+  if (opts.tab === "pending") conds.push(eq(giftRecord.settleStatus, "UNSETTLED"));
+  if (opts.tab === "settled") conds.push(eq(giftRecord.settleStatus, "SETTLED"));
   const rows = await db
     .select({
       id: giftRecord.id,
@@ -432,10 +435,44 @@ export async function getMyGiftRecords() {
       createdAt: giftRecord.createdAt,
     })
     .from(giftRecord)
-    .where(eq(giftRecord.playerId, me.id))
+    .where(and(...conds))
     .orderBy(desc(giftRecord.createdAt))
-    .limit(500);
+    .limit(opts.limit ?? 500)
+    .offset(opts.offset ?? 0);
   return rows;
+}
+
+/** 陪玩:礼物收入汇总(今日/本月/累计已支付 + 待支付数),不受分页影响 */
+export async function getMyGiftStats() {
+  const { user: me } = await requireSession({ role: "PLAYER" });
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const settledEarn = (since: Date) =>
+    sql<number>`coalesce(sum(case when ${giftRecord.settleStatus} = 'SETTLED' and ${giftRecord.createdAt} >= ${since} then ${giftRecord.playerEarnCents} else 0 end), 0)`.mapWith(Number);
+  const settledCount = (since: Date) =>
+    sql<number>`count(case when ${giftRecord.settleStatus} = 'SETTLED' and ${giftRecord.createdAt} >= ${since} then 1 end)`.mapWith(Number);
+
+  const [row] = await db
+    .select({
+      todayCount: settledCount(todayStart),
+      todayEarn: settledEarn(todayStart),
+      monthCount: settledCount(monthStart),
+      monthEarn: settledEarn(monthStart),
+      totalCount: sql<number>`count(case when ${giftRecord.settleStatus} = 'SETTLED' then 1 end)`.mapWith(Number),
+      totalEarn: sql<number>`coalesce(sum(case when ${giftRecord.settleStatus} = 'SETTLED' then ${giftRecord.playerEarnCents} else 0 end), 0)`.mapWith(Number),
+      pending: sql<number>`count(case when ${giftRecord.settleStatus} = 'UNSETTLED' then 1 end)`.mapWith(Number),
+    })
+    .from(giftRecord)
+    .where(eq(giftRecord.playerId, me.id));
+
+  return {
+    today: { count: row?.todayCount ?? 0, earn: row?.todayEarn ?? 0 },
+    month: { count: row?.monthCount ?? 0, earn: row?.monthEarn ?? 0 },
+    total: { count: row?.totalCount ?? 0, earn: row?.totalEarn ?? 0 },
+    pending: row?.pending ?? 0,
+  };
 }
 
 /** 陪玩:未读数(只算 SETTLED) */

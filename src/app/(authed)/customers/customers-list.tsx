@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -44,6 +44,7 @@ import {
   deleteCustomerAction,
   getCustomerLedgerAction,
   mergeCustomersAction,
+  searchCustomersAction,
   updateCustomerAction,
 } from "@/server/actions/customers";
 import type { CustomerBalanceTxnType, OrderStatus } from "@/db/schema";
@@ -104,11 +105,12 @@ type CustomerLedgerRow = CustomerBalanceLedgerRow | CustomerOrderLedgerRow;
 export function CustomersList({
   customers,
   players,
+  startIndex,
 }: {
   customers: CustomerRow[];
   players: PlayerOption[];
+  startIndex: number;
 }) {
-  const [searchQuery, setSearchQuery] = useState("");
   const [editing, setEditing] = useState<CustomerRow | null>(null);
   const [depositing, setDepositing] = useState<CustomerRow | null>(null);
   const [deducting, setDeducting] = useState<CustomerRow | null>(null);
@@ -116,44 +118,18 @@ export function CustomersList({
   const [deleting, setDeleting] = useState<CustomerRow | null>(null);
   const [ledgerCustomer, setLedgerCustomer] = useState<CustomerRow | null>(null);
 
-  const filteredCustomers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.memberNo.toLowerCase().includes(q) ||
-        (c.wechat ?? "").toLowerCase().includes(q)
-    );
-  }, [customers, searchQuery]);
-
   return (
     <>
-      <div className="mb-4">
-        <Input
-          placeholder="搜索客户名、会员号、微信…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-xs"
-        />
-        {searchQuery && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            显示 {filteredCustomers.length} / {customers.length} 位客户
-          </p>
-        )}
-      </div>
       <Card className="overflow-hidden p-0">
         <ul className="divide-y">
-          {filteredCustomers.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-muted-foreground">没有匹配的客户</li>
-          ) : filteredCustomers.map((c, i) => (
+          {customers.map((c, i) => (
             <li
               key={c.id}
               className="flex flex-col gap-3 px-4 py-3 hover:bg-accent/40 sm:flex-row sm:items-center"
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-md font-mono text-sm font-medium tabular-nums text-muted-foreground">
-                  {i + 1}
+                  {startIndex + i + 1}
                 </span>
                 <Avatar className="size-9 shrink-0">
                   <AvatarFallback className="bg-muted text-foreground text-xs">
@@ -288,7 +264,6 @@ export function CustomersList({
         <MergeDialog
           key={merging.id}
           customer={merging}
-          allCustomers={customers}
           onClose={() => setMerging(null)}
         />
       )}
@@ -637,67 +612,71 @@ function DeductDialog({
 
 function MergeDialog({
   customer,
-  allCustomers,
   onClose,
 }: {
   customer: CustomerRow;
-  allCustomers: CustomerRow[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [results, setResults] = useState<CustomerRow[]>([]);
+  const [searching, setSearching] = useState(false);
+  // 已选客户快照:合并预览不依赖当前搜索结果,翻找其它关键词也不丢
+  const [selected, setSelected] = useState<Map<string, CustomerRow>>(new Map());
   const [pending, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const candidates = useMemo(
-    () => allCustomers.filter((c) => c.id !== customer.id),
-    [allCustomers, customer.id]
-  );
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      const rows = await searchCustomersAction({ q: query.trim() });
+      setResults(
+        rows
+          .filter((r) => r.customerId !== customer.id)
+          .map((r) => ({
+            id: r.customerId,
+            name: r.name,
+            memberNo: r.memberNo,
+            wechat: r.wechat,
+            note: r.note,
+            orderCount: r.orderCount,
+            payableCents: r.payableCents,
+            durationMin: r.durationMin,
+            balanceCents: r.balanceCents,
+          }))
+      );
+      setSearching(false);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, customer.id]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return candidates;
-    return candidates.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.memberNo.includes(q) ||
-        (c.wechat?.toLowerCase().includes(q) ?? false)
-    );
-  }, [candidates, query]);
-
-  const selectedCustomers = useMemo(
-    () => candidates.filter((c) => selectedIds.has(c.id)),
-    [candidates, selectedIds]
-  );
+  const selectedCustomers = Array.from(selected.values());
   const addedOrders = selectedCustomers.reduce((s, c) => s + c.orderCount, 0);
-  const addedDuration = selectedCustomers.reduce(
-    (s, c) => s + c.durationMin,
-    0
-  );
-  const addedBalance = selectedCustomers.reduce(
-    (s, c) => s + c.balanceCents,
-    0
-  );
+  const addedDuration = selectedCustomers.reduce((s, c) => s + c.durationMin, 0);
+  const addedBalance = selectedCustomers.reduce((s, c) => s + c.balanceCents, 0);
 
-  function toggle(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  function toggle(c: CustomerRow) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(c.id)) next.delete(c.id);
+      else next.set(c.id, c);
       return next;
     });
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (selectedIds.size === 0) {
+    if (selected.size === 0) {
       toast.error("请至少选一个要合并的客户");
       return;
     }
     startTransition(async () => {
       const res = await mergeCustomersAction({
         primaryId: customer.id,
-        mergeIds: Array.from(selectedIds),
+        mergeIds: Array.from(selected.keys()),
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -726,23 +705,27 @@ function MergeDialog({
               id="merge-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="按名字 / 微信 / 会员号过滤"
+              placeholder="按名字 / 微信 / 会员号搜索"
               autoFocus
             />
           </div>
 
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">没有匹配的客户</p>
-          ) : (
-            <div className="max-h-64 overflow-y-auto rounded-md border">
+          <div className="max-h-64 overflow-y-auto rounded-md border">
+            {searching ? (
+              <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+                <Loader2 className="animate-spin size-4" /> 搜索中
+              </div>
+            ) : results.length === 0 ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">没有匹配的客户</p>
+            ) : (
               <ul className="divide-y">
-                {filtered.map((c) => {
-                  const checked = selectedIds.has(c.id);
+                {results.map((c) => {
+                  const checked = selected.has(c.id);
                   return (
                     <li key={c.id}>
                       <button
                         type="button"
-                        onClick={() => toggle(c.id)}
+                        onClick={() => toggle(c)}
                         className={cn(
                           "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
                           checked && "bg-primary/10"
@@ -775,12 +758,12 @@ function MergeDialog({
                   );
                 })}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
 
-          {selectedIds.size > 0 && (
+          {selected.size > 0 && (
             <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-              已选 {selectedIds.size} 人,合并后:
+              已选 {selected.size} 人,合并后:
               <span className="ml-1 font-medium text-foreground">
                 {customer.name}
               </span>{" "}
@@ -811,7 +794,7 @@ function MergeDialog({
             <Button
               type="submit"
               variant="destructive"
-              disabled={pending || selectedIds.size === 0}
+              disabled={pending || selected.size === 0}
             >
               {pending && <Loader2 className="animate-spin" />}
               确认合并

@@ -221,8 +221,8 @@ export async function leaderboard(range: RangeKey): Promise<LeaderboardRow[]> {
   }));
 }
 
-export async function customerSummary(opts: { q?: string } = {}) {
-  const { q } = opts;
+export async function customerSummary(opts: { q?: string; limit?: number; offset?: number } = {}) {
+  const { q, limit, offset } = opts;
   const completedPayable = sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' then ${order.payableCents} else 0 end), 0)`;
   const rows = await db
     .select({
@@ -244,9 +244,11 @@ export async function customerSummary(opts: { q?: string } = {}) {
     })
     .from(customer)
     .leftJoin(order, eq(order.customerId, customer.id))
-    .where(q ? or(like(customer.name, `%${q}%`), like(customer.memberNo, `%${q}%`), like(customer.wechat, `%${q}%`)) : undefined)
+    .where(customerSearchWhere(q))
     .groupBy(customer.id)
-    .orderBy(desc(completedPayable), desc(customer.createdAt));
+    .orderBy(desc(completedPayable), desc(customer.createdAt))
+    .limit(limit ?? 1000)
+    .offset(offset ?? 0);
 
   return rows.map((r) => ({
     customerId: r.customerId,
@@ -259,6 +261,53 @@ export async function customerSummary(opts: { q?: string } = {}) {
     durationMin: r.durationMin ?? 0,
     balanceCents: r.balanceCents,
   }));
+}
+
+function customerSearchWhere(q?: string) {
+  return q
+    ? or(
+        like(customer.name, `%${q}%`),
+        like(customer.memberNo, `%${q}%`),
+        like(customer.wechat, `%${q}%`)
+      )
+    : undefined;
+}
+
+/** 客户页头部汇总(不受分页影响,按搜索条件统计全量) */
+export async function customerTotals(opts: { q?: string } = {}) {
+  const where = customerSearchWhere(opts.q);
+  const [base, completed, repeatRows] = await Promise.all([
+    db
+      .select({
+        count: count(),
+        totalBalance: sum(customer.balanceCents).mapWith(Number),
+      })
+      .from(customer)
+      .where(where),
+    db
+      .select({
+        totalSpent: sum(order.payableCents).mapWith(Number),
+        totalDuration: sum(order.durationMin).mapWith(Number),
+      })
+      .from(order)
+      .innerJoin(customer, eq(customer.id, order.customerId))
+      .where(and(eq(order.orderStatus, "COMPLETED"), where)),
+    db
+      .select({ customerId: order.customerId })
+      .from(order)
+      .innerJoin(customer, eq(customer.id, order.customerId))
+      .where(and(eq(order.orderStatus, "COMPLETED"), where))
+      .groupBy(order.customerId)
+      .having(sql`count(*) >= 2`),
+  ]);
+
+  return {
+    count: base[0]?.count ?? 0,
+    totalBalance: base[0]?.totalBalance ?? 0,
+    totalSpent: completed[0]?.totalSpent ?? 0,
+    totalDuration: completed[0]?.totalDuration ?? 0,
+    repeats: repeatRows.length,
+  };
 }
 
 export async function recentOrders(opts: { playerId?: string; limit?: number }) {

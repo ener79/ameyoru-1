@@ -56,22 +56,19 @@ interface UnreadRecord {
   createdAt: string;
 }
 
+interface GiftStats {
+  today: { count: number; earn: number };
+  month: { count: number; earn: number };
+  total: { count: number; earn: number };
+  pending: number;
+}
+
 interface Props {
   records: Record[];
   unread: UnreadRecord[];
   myId: string;
-}
-
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function isSameMonth(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  tab: "all" | "pending" | "settled";
+  stats: GiftStats;
 }
 
 const EMPTY_FORM = {
@@ -82,7 +79,7 @@ const EMPTY_FORM = {
   note: "",
 } satisfies UpsertGiftRecordInput;
 
-export function MyGiftsClient({ records, unread, myId }: Props) {
+export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
   const router = useRouter();
   const [popupOpen, setPopupOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -92,7 +89,6 @@ export function MyGiftsClient({ records, unread, myId }: Props) {
     playerId: myId,
   });
   const [pending, startTransition] = useTransition();
-  const [tab, setTab] = useState<"all" | "pending" | "settled">("all");
 
   useEffect(() => {
     if (unread.length > 0) setPopupOpen(true);
@@ -104,37 +100,9 @@ export function MyGiftsClient({ records, unread, myId }: Props) {
     return { total, fee, earn: total - fee };
   }, [form.giftTierCents, form.quantity]);
 
-  const stats = useMemo(() => {
-    const now = new Date();
-    const today = { count: 0, earn: 0 };
-    const month = { count: 0, earn: 0 };
-    const total = { count: 0, earn: 0 };
-    let pending = 0;
-    for (const r of records) {
-      if (r.settleStatus !== "SETTLED") {
-        pending += 1;
-        continue;
-      }
-      const d = new Date(r.createdAt);
-      total.count += 1;
-      total.earn += r.playerEarnCents;
-      if (isSameMonth(d, now)) {
-        month.count += 1;
-        month.earn += r.playerEarnCents;
-      }
-      if (isSameDay(d, now)) {
-        today.count += 1;
-        today.earn += r.playerEarnCents;
-      }
-    }
-    return { today, month, total, pending };
-  }, [records]);
-
-  const filtered = useMemo(() => {
-    if (tab === "pending") return records.filter((r) => r.settleStatus === "UNSETTLED");
-    if (tab === "settled") return records.filter((r) => r.settleStatus === "SETTLED");
-    return records;
-  }, [records, tab]);
+  function changeTab(t: "all" | "pending" | "settled") {
+    router.push(t === "all" ? "/my-gifts" : `/my-gifts?tab=${t}`);
+  }
 
   function openNew() {
     setEditing(null);
@@ -226,7 +194,7 @@ export function MyGiftsClient({ records, unread, myId }: Props) {
         {(["all", "pending", "settled"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => changeTab(t)}
             className={cn(
               "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
               tab === t
@@ -240,7 +208,7 @@ export function MyGiftsClient({ records, unread, myId }: Props) {
       </div>
 
       <div>
-        {filtered.length === 0 ? (
+        {records.length === 0 ? (
           <EmptyState
             icon={<Gift />}
             title={
@@ -258,7 +226,7 @@ export function MyGiftsClient({ records, unread, myId }: Props) {
           />
         ) : (
           <div className="space-y-2">
-            {filtered.map((r) => {
+            {records.map((r) => {
               const isPending = r.settleStatus === "UNSETTLED";
               const canEdit = isPending && r.submitterId === myId;
               return (

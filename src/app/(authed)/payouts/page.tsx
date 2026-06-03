@@ -1,18 +1,44 @@
-import { and, desc, eq, gt, or } from "drizzle-orm";
+import { and, count, desc, eq, gt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { order, customer } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { playerSummary } from "@/server/stats";
 import { PageHeader } from "@/components/page-header";
+import { Pagination } from "@/components/pagination";
 import { KpiCard } from "@/components/kpi-card";
 import { formatYuan } from "@/lib/format";
 import { PayoutsList } from "./payouts-list";
 
-export default async function PayoutsPage() {
-  const { user: me } = await requireSession({ role: "PLAYER" });
+const PAGE_SIZE = 30;
 
-  const [month, rows] = await Promise.all([
+export default async function PayoutsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { user: me } = await requireSession({ role: "PLAYER" });
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1") || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const payoutWhere = and(
+    eq(order.playerId, me.id),
+    or(
+      eq(order.orderStatus, "COMPLETED"),
+      and(
+        eq(order.orderStatus, "CANCELED"),
+        gt(order.playerCompensationCents, 0)
+      )
+    )
+  );
+
+  const [month, countResult, rows] = await Promise.all([
     playerSummary(me.id, "month"),
+    db
+      .select({ count: count() })
+      .from(order)
+      .innerJoin(customer, eq(customer.id, order.customerId))
+      .where(payoutWhere),
     db
       .select({
         id: order.id,
@@ -28,22 +54,13 @@ export default async function PayoutsPage() {
       })
       .from(order)
       .innerJoin(customer, eq(customer.id, order.customerId))
-      .where(
-        and(
-          eq(order.playerId, me.id),
-          or(
-            eq(order.orderStatus, "COMPLETED"),
-            and(
-              eq(order.orderStatus, "CANCELED"),
-              gt(order.playerCompensationCents, 0)
-            )
-          )
-        )
-      )
+      .where(payoutWhere)
       .orderBy(desc(order.startAt))
-      .limit(300),
+      .limit(PAGE_SIZE)
+      .offset(offset),
   ]);
 
+  const total = countResult[0]?.count ?? 0;
   const settledThisMonth = month.playerEarnCents - month.pendingEarnCents;
 
   return (
@@ -77,6 +94,12 @@ export default async function PayoutsPage() {
             startAt: r.startAt.toISOString(),
             settledAt: r.settledAt?.toISOString() ?? null,
           }))}
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          baseHref="/payouts"
         />
       </div>
     </>

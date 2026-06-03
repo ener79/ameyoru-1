@@ -12,6 +12,7 @@ import {
   user,
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
+import { customerSummary } from "@/server/stats";
 import { formatYuan, yuanStringToCents } from "@/lib/format";
 import { nanoid } from "../id";
 
@@ -298,6 +299,11 @@ export async function listActivePlayersAction() {
     name: r.name,
     username: r.username ?? "",
   }));
+}
+
+export async function searchCustomersAction(input: { q?: string }) {
+  await requireSession({ role: ["BOSS", "STAFF"] });
+  return customerSummary({ q: input.q?.trim() || undefined, limit: 50 });
 }
 
 export async function getCustomerLedgerAction(input: {
