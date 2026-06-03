@@ -7,6 +7,10 @@ const ordersAction = readFileSync(
   join(root, "src/server/actions/orders.ts"),
   "utf8"
 );
+const dbUtils = readFileSync(
+  join(root, "src/lib/db-utils.ts"),
+  "utf8"
+);
 
 function functionBlock(name: string): string {
   const start = ordersAction.indexOf(`export async function ${name}`);
@@ -33,8 +37,9 @@ assert.match(ordersAction, /function settlableOrderCondition\(\)/);
 assert.match(ordersAction, /eq\(order\.orderStatus, "COMPLETED"\)/);
 assert.match(ordersAction, /eq\(order\.orderStatus, "CANCELED"\)/);
 assert.match(ordersAction, /gt\(order\.playerCompensationCents, 0\)/);
-assert.match(ordersAction, /"affectedRows" in result/);
-assert.match(ordersAction, /"rowsAffected" in result/);
+assert.match(ordersAction, /getAffectedRows.*from.*db-utils/);
+assert.match(dbUtils, /"affectedRows" in result/);
+assert.match(dbUtils, /"rowsAffected" in result/);
 
 const cancelBlock = functionBlock("cancelOrderAction");
 assert.match(cancelBlock, /eq\(order\.settleStatus, "UNSETTLED"\)/);
@@ -85,11 +90,11 @@ assert.match(batchBlock, /const uniqueIds = Array\.from\(new Set\(input\.ids\)\)
 assertOrdered(
   batchBlock,
   [
-    "const result = await tx",
+    "const result = await db",
     "inArray(order.id, uniqueIds)",
     'eq(order.settleStatus, "UNSETTLED")',
     "settlableOrderCondition()",
-    "settled = getAffectedRows(result)",
+    "const settled = getAffectedRows(result)",
     "if (settled > 0)",
     'action: "BATCH_SETTLE"',
     'revalidatePath("/orders")',

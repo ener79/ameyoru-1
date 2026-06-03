@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { avatarInitial, formatDate, formatYuan } from "@/lib/format";
 import type { Role } from "@/db/schema";
+import { ProfileEditForm } from "./profile-edit-form";
 import { QrUploadSection } from "./qr-upload-section";
 
 const roleLabel: Record<Role, string> = {
@@ -83,6 +84,19 @@ export default async function ProfilePage() {
             )}
             <InfoRow label="注册时间" value={formatDate(profile.createdAt)} />
           </ul>
+        </Card>
+
+        <Card className="p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold">修改资料</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              修改你的显示名和登录用户名
+            </p>
+          </div>
+          <ProfileEditForm
+            initialName={profile.name}
+            initialUsername={profile.username ?? ""}
+          />
         </Card>
 
         <Card className="p-6 space-y-4">

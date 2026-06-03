@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { giftRecord, user, GIFT_TIER_CENTS } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
+import { getAffectedRows } from "@/lib/db-utils";
 import { DEFAULT_GIFT_FEE_RATE_BP, GIFT_TIER_LABELS } from "@/lib/constants";
 import { nanoid } from "../id";
 import { logAudit } from "@/server/audit";
@@ -243,22 +244,7 @@ export async function settleGiftAction(input: {
   paidMethod?: "WECHAT" | "ALIPAY";
 }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  const [target] = await db
-    .select({
-      id: giftRecord.id,
-      settleStatus: giftRecord.settleStatus,
-      playerId: giftRecord.playerId,
-      playerEarnCents: giftRecord.playerEarnCents,
-    })
-    .from(giftRecord)
-    .where(eq(giftRecord.id, input.id))
-    .limit(1);
-  if (!target) return { ok: false as const, error: "记录不存在" };
-  if (target.settleStatus === "SETTLED") {
-    return { ok: false as const, error: "已支付,请勿重复操作" };
-  }
-
-  await db
+  const result = await db
     .update(giftRecord)
     .set({
       settleStatus: "SETTLED",
@@ -266,7 +252,25 @@ export async function settleGiftAction(input: {
       paidMethod: input.paidMethod ?? null,
       updatedAt: new Date(),
     })
-    .where(eq(giftRecord.id, input.id));
+    .where(and(eq(giftRecord.id, input.id), eq(giftRecord.settleStatus, "UNSETTLED")));
+  if (getAffectedRows(result) !== 1) {
+    const [current] = await db
+      .select({ settleStatus: giftRecord.settleStatus })
+      .from(giftRecord)
+      .where(eq(giftRecord.id, input.id))
+      .limit(1);
+    if (!current) return { ok: false as const, error: "记录不存在" };
+    if (current.settleStatus === "SETTLED") {
+      return { ok: false as const, error: "已支付,请勿重复操作" };
+    }
+    return { ok: false as const, error: "操作失败,请重试" };
+  }
+
+  const [target] = await db
+    .select({ playerEarnCents: giftRecord.playerEarnCents })
+    .from(giftRecord)
+    .where(eq(giftRecord.id, input.id))
+    .limit(1);
 
   logAudit({
     actorId: me.id,
@@ -274,7 +278,7 @@ export async function settleGiftAction(input: {
     action: "SETTLE_GIFT",
     targetType: "gift_record",
     targetId: input.id,
-    detail: { amount: target.playerEarnCents, paidMethod: input.paidMethod },
+    detail: { amount: target?.playerEarnCents, paidMethod: input.paidMethod },
   });
 
   invalidate();
@@ -283,16 +287,7 @@ export async function settleGiftAction(input: {
 
 export async function unsettleGiftAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  const [target] = await db
-    .select({ id: giftRecord.id, settleStatus: giftRecord.settleStatus })
-    .from(giftRecord)
-    .where(eq(giftRecord.id, input.id))
-    .limit(1);
-  if (!target) return { ok: false as const, error: "记录不存在" };
-  if (target.settleStatus !== "SETTLED") {
-    return { ok: false as const, error: "该报单未支付,无需撤销" };
-  }
-  await db
+  const result = await db
     .update(giftRecord)
     .set({
       settleStatus: "UNSETTLED",
@@ -300,7 +295,19 @@ export async function unsettleGiftAction(input: { id: string }) {
       paidMethod: null,
       updatedAt: new Date(),
     })
-    .where(eq(giftRecord.id, input.id));
+    .where(and(eq(giftRecord.id, input.id), eq(giftRecord.settleStatus, "SETTLED")));
+  if (getAffectedRows(result) !== 1) {
+    const [current] = await db
+      .select({ settleStatus: giftRecord.settleStatus })
+      .from(giftRecord)
+      .where(eq(giftRecord.id, input.id))
+      .limit(1);
+    if (!current) return { ok: false as const, error: "记录不存在" };
+    if (current.settleStatus !== "SETTLED") {
+      return { ok: false as const, error: "该报单未支付,无需撤销" };
+    }
+    return { ok: false as const, error: "操作失败,请重试" };
+  }
   logAudit({
     actorId: me.id,
     actorName: me.name,

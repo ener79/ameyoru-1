@@ -12,6 +12,7 @@ import { user, account, playerInvite } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/auth-helpers";
 import { readImageUpload, type ImageUpload } from "@/lib/image-upload";
+import { getAffectedRows } from "@/lib/db-utils";
 import {
   DEFAULT_PLAYER_RATE_CENTS,
   INTERNAL_EMAIL_DOMAIN,
@@ -24,35 +25,6 @@ import { nanoid } from "../id";
 const UPLOAD_ROOT = join(process.cwd(), "uploads");
 const MAX_BYTES = 20 * 1024 * 1024;
 const QR_EXTS = ["png", "jpg", "webp", "gif", "bmp", "avif", "heic", "heif"];
-
-function getAffectedRows(result: unknown): number {
-  const candidate = Array.isArray(result) ? result[0] : result;
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "affectedRows" in candidate &&
-    typeof candidate.affectedRows === "number"
-  ) {
-    return candidate.affectedRows;
-  }
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "rowsAffected" in candidate &&
-    typeof candidate.rowsAffected === "number"
-  ) {
-    return candidate.rowsAffected;
-  }
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "changes" in candidate &&
-    typeof candidate.changes === "number"
-  ) {
-    return candidate.changes;
-  }
-  return 0;
-}
 
 const usernameField = z
   .string()

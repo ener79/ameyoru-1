@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { order, customer, customerBalanceTxn, user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
+import { getAffectedRows } from "@/lib/db-utils";
 import { computeOrder } from "@/lib/calc";
 import { yuanStringToCents } from "@/lib/format";
 import { DEFAULT_COMMISSION_PER_HOUR_CENTS } from "@/lib/constants";
@@ -28,28 +29,6 @@ function settlableOrderCondition() {
       gt(order.playerCompensationCents, 0)
     )
   );
-}
-
-function getAffectedRows(result: unknown): number {
-  if (typeof result === "object" && result !== null) {
-    if ("affectedRows" in result) {
-      const value = (result as { affectedRows: unknown }).affectedRows;
-      if (typeof value === "number") return value;
-    }
-    if ("rowsAffected" in result) {
-      const value = (result as { rowsAffected: unknown }).rowsAffected;
-      if (typeof value === "number") return value;
-    }
-  }
-
-  if (Array.isArray(result)) {
-    for (const item of result) {
-      const value = getAffectedRows(item);
-      if (value > 0) return value;
-    }
-  }
-
-  return 0;
 }
 
 const optionalTrimmed = (max: number) =>
@@ -625,25 +604,22 @@ export async function batchSettleAction(input: {
 
   const uniqueIds = Array.from(new Set(input.ids));
   const now = new Date();
-  let settled = 0;
 
-  await db.transaction(async (tx) => {
-    const result = await tx
-      .update(order)
-      .set({
-        settleStatus: "SETTLED",
-        settledAt: now,
-        paidMethod: input.paidMethod ?? null,
-      })
-      .where(
-        and(
-          inArray(order.id, uniqueIds),
-          eq(order.settleStatus, "UNSETTLED"),
-          settlableOrderCondition()
-        )
-      );
-    settled = getAffectedRows(result);
-  });
+  const result = await db
+    .update(order)
+    .set({
+      settleStatus: "SETTLED",
+      settledAt: now,
+      paidMethod: input.paidMethod ?? null,
+    })
+    .where(
+      and(
+        inArray(order.id, uniqueIds),
+        eq(order.settleStatus, "UNSETTLED"),
+        settlableOrderCondition()
+      )
+    );
+  const settled = getAffectedRows(result);
 
   if (settled > 0) {
     logAudit({ actorId: me.id, actorName: me.name, action: "BATCH_SETTLE", targetType: "order", detail: { count: settled, paidMethod: input.paidMethod } });
