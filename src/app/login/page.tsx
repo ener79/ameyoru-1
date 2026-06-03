@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 import Image from "next/image";
 import { LoginForm } from "./login-form";
 import { getAllEnabledAnnouncements } from "@/server/actions/announcements";
-import { getSiteSettings } from "@/server/actions/site-settings";
+import { getSiteSettings } from "@/lib/site-settings";
 import { LoginAnnouncements } from "@/components/login-announcements";
 
 export default async function LoginPage() {

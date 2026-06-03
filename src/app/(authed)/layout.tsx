@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth-helpers";
 import { AppSidebar, type NavItem } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getMyUnreadGiftCount } from "@/server/actions/gifts";
-import { getSiteSettings } from "@/server/actions/site-settings";
+import { getSiteSettings } from "@/lib/site-settings";
 import { db } from "@/db";
 import { giftRecord } from "@/db/schema";
 import type { Role } from "@/db/schema";

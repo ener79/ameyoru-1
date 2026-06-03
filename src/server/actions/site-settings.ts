@@ -18,32 +18,6 @@ const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const LOGO_EXTS = ["png", "jpg", "webp", "gif", "avif"];
 const PRESET_KEYS = THEME_PRESETS.map((p) => p.key) as [string, ...string[]];
 
-const DEFAULT_SETTINGS = {
-  siteName: "起点乱斗",
-  logoPath: null as string | null,
-  contactInfo: null as string | null,
-  footerText: null as string | null,
-  themePreset: "default",
-  customThemeCSS: null as string | null,
-  borderRadius: null as string | null,
-};
-
-export async function getSiteSettings() {
-  const [row] = await db
-    .select({
-      siteName: siteSettings.siteName,
-      logoPath: siteSettings.logoPath,
-      contactInfo: siteSettings.contactInfo,
-      footerText: siteSettings.footerText,
-      themePreset: siteSettings.themePreset,
-      customThemeCSS: siteSettings.customThemeCSS,
-      borderRadius: siteSettings.borderRadius,
-    })
-    .from(siteSettings)
-    .limit(1);
-  return row ?? DEFAULT_SETTINGS;
-}
-
 const updateSchema = z.object({
   siteName: z.string().min(1, "请填写站点名称").max(100),
   contactInfo: z.string().max(500).optional().nullable().transform((s) => s?.trim() || null),

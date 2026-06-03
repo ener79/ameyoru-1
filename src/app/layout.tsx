@@ -4,7 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSiteSettings } from "@/server/actions/site-settings";
+import { getSiteSettings } from "@/lib/site-settings";
 import { getPresetCSS } from "@/lib/theme-presets";
 import { cn } from "@/lib/utils";
 import "./globals.css";

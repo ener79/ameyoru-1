@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth-helpers";
-import { getSiteSettings } from "@/server/actions/site-settings";
+import { getSiteSettings } from "@/lib/site-settings";
 import { PageHeader } from "@/components/page-header";
 import { SiteSettingsForm } from "./site-settings-form";
 
