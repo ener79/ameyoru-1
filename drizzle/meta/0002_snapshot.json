@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "08b18a64-964f-4491-a787-5d926c6b3b8e",
-  "prevId": "f43cc6f7-8aa1-4a13-8c92-5d0473b6e8bb",
+  "id": "f43cc6f7-8aa1-4a13-8c92-5d0473b6e8bb",
+  "prevId": "b835d7c7-a417-49e4-a191-8bc118587118",
   "tables": {
     "account": {
       "name": "account",
@@ -120,212 +120,6 @@
       "compositePrimaryKeys": {
         "account_id": {
           "name": "account_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "announcement": {
-      "name": "announcement",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "type": {
-          "name": "type",
-          "type": "enum('NOTICE','ACTIVITY')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'NOTICE'"
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "is_permanent": {
-          "name": "is_permanent",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "start_at": {
-          "name": "start_at",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "end_at": {
-          "name": "end_at",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "created_by_id": {
-          "name": "created_by_id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP(3)"
-        }
-      },
-      "indexes": {
-        "idx_announcement_enabled": {
-          "name": "idx_announcement_enabled",
-          "columns": [
-            "enabled",
-            "sort_order"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "announcement_id": {
-          "name": "announcement_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "audit_log": {
-      "name": "audit_log",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "actor_id": {
-          "name": "actor_id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "actor_name": {
-          "name": "actor_name",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "action": {
-          "name": "action",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "target_type": {
-          "name": "target_type",
-          "type": "varchar(30)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "target_id": {
-          "name": "target_id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "detail": {
-          "name": "detail",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP(3)"
-        }
-      },
-      "indexes": {
-        "audit_log_actor_idx": {
-          "name": "audit_log_actor_idx",
-          "columns": [
-            "actor_id",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "audit_log_target_idx": {
-          "name": "audit_log_target_idx",
-          "columns": [
-            "target_type",
-            "target_id"
-          ],
-          "isUnique": false
-        },
-        "audit_log_created_idx": {
-          "name": "audit_log_created_idx",
-          "columns": [
-            "created_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "audit_log_id": {
-          "name": "audit_log_id",
           "columns": [
             "id"
           ]
@@ -715,35 +509,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "submitter_id": {
-          "name": "submitter_id",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "settle_status": {
-          "name": "settle_status",
-          "type": "enum('UNSETTLED','SETTLED')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'UNSETTLED'"
-        },
-        "settled_at": {
-          "name": "settled_at",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "paid_method": {
-          "name": "paid_method",
-          "type": "enum('WECHAT','ALIPAY')",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "datetime(3)",
@@ -774,21 +539,6 @@
           "name": "gift_record_created_idx",
           "columns": [
             "created_at"
-          ],
-          "isUnique": false
-        },
-        "gift_record_settle_idx": {
-          "name": "gift_record_settle_idx",
-          "columns": [
-            "settle_status",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "gift_record_sender_idx": {
-          "name": "gift_record_sender_idx",
-          "columns": [
-            "sender_nickname"
           ],
           "isUnique": false
         }
@@ -1472,14 +1222,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "deposit_paid": {
-          "name": "deposit_paid",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
         },
         "last_gift_seen_at": {
           "name": "last_gift_seen_at",
