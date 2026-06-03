@@ -1,6 +1,7 @@
 import { eq, sql, and } from "drizzle-orm";
 import { requireSession } from "@/lib/auth-helpers";
-import { AppNav, type NavItem } from "@/components/app-nav";
+import { AppSidebar, type NavItem } from "@/components/app-sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getMyUnreadGiftCount } from "@/server/actions/gifts";
 import { db } from "@/db";
 import { giftRecord } from "@/db/schema";
@@ -97,8 +98,8 @@ export default async function AuthedLayout({
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
-      <AppNav
+    <SidebarProvider>
+      <AppSidebar
         items={withBadges}
         user={{
           displayName: user.name,
@@ -106,9 +107,14 @@ export default async function AuthedLayout({
           roleLabel: roleLabel[user.role],
         }}
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        {children}
-      </main>
-    </div>
+      <SidebarInset>
+        <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 px-4">
+          <SidebarTrigger className="-ml-1" />
+        </header>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+          {children}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

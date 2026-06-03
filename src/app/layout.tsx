@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -33,8 +35,12 @@ export default function RootLayout({
           GeistMono.variable
         )}
       >
-        {children}
-        <Toaster position="top-center" richColors closeButton />
+        <ThemeProvider>
+          <TooltipProvider>
+            {children}
+            <Toaster position="top-center" richColors closeButton theme="system" />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
