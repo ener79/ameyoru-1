@@ -2,15 +2,22 @@ export const dynamic = "force-dynamic";
 import Image from "next/image";
 import { LoginForm } from "./login-form";
 import { getAllEnabledAnnouncements } from "@/server/actions/announcements";
+import { getSiteSettings } from "@/server/actions/site-settings";
 import { LoginAnnouncements } from "@/components/login-announcements";
 
 export default async function LoginPage() {
-  const announcements = await getAllEnabledAnnouncements();
+  const [announcements, site] = await Promise.all([
+    getAllEnabledAnnouncements(),
+    getSiteSettings(),
+  ]);
+  const logoSrc = site.logoPath ? `/api/uploads/${site.logoPath}` : "/logo.png";
   const bannerItems = announcements.map((a) => ({
     id: a.id,
     type: a.type,
     title: a.title,
     content: a.content,
+    contentJson: a.contentJson,
+    imagePath: a.imagePath,
     isPermanent: a.isPermanent,
     endAt: a.endAt?.toISOString() ?? null,
   }));
@@ -18,14 +25,14 @@ export default async function LoginPage() {
   return (
     <LoginAnnouncements items={bannerItems}>
       <div className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
-        <BrandPanel />
-        <FormPanel />
+        <BrandPanel siteName={site.siteName} logoSrc={logoSrc} footerText={site.footerText} />
+        <FormPanel siteName={site.siteName} logoSrc={logoSrc} />
       </div>
     </LoginAnnouncements>
   );
 }
 
-function BrandPanel() {
+function BrandPanel({ siteName, logoSrc, footerText }: { siteName: string; logoSrc: string; footerText: string | null }) {
   return (
     <div className="relative hidden overflow-hidden bg-gradient-to-br from-primary/8 via-background to-background lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-12">
       <div
@@ -38,15 +45,14 @@ function BrandPanel() {
       />
 
       <div className="relative flex items-center gap-2.5">
-        <Image src="/logo.png" alt="起点乱斗" width={36} height={36} className="rounded-xl shadow-sm" />
-        <span className="text-base font-semibold tracking-tight"><span className="font-black italic">起点</span><span className="font-black italic text-red-500">乱斗</span></span>
+        <Image src={logoSrc} alt={siteName} width={36} height={36} className="rounded-xl shadow-sm" />
+        <span className="text-base font-semibold tracking-tight">{siteName}</span>
       </div>
 
       <div className="relative space-y-3">
         <h1 className="text-4xl font-semibold tracking-tight">欢迎使用</h1>
         <p className="text-lg text-muted-foreground">
           内部管理系统
-          <span className="ml-2 text-sm">(非平台)</span>
         </p>
         <div className="mt-8 flex flex-wrap gap-2">
           <FeatureChip>派单</FeatureChip>
@@ -58,7 +64,7 @@ function BrandPanel() {
       </div>
 
       <div className="relative text-xs text-muted-foreground">
-        © {new Date().getFullYear()} <span className="font-black italic">起点</span><span className="font-black italic text-red-500">乱斗</span>
+        {footerText ?? `© ${new Date().getFullYear()} ${siteName}`}
       </div>
     </div>
   );
@@ -72,13 +78,13 @@ function FeatureChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FormPanel() {
+function FormPanel({ siteName, logoSrc }: { siteName: string; logoSrc: string }) {
   return (
     <div className="flex items-center justify-center bg-background p-6 sm:p-10">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex flex-col items-center gap-2 text-center lg:hidden">
-          <Image src="/logo.png" alt="起点乱斗" width={40} height={40} className="rounded-xl shadow-sm" />
-          <span className="text-sm font-semibold tracking-tight"><span className="font-black italic">起点</span><span className="font-black italic text-red-500">乱斗</span></span>
+          <Image src={logoSrc} alt={siteName} width={40} height={40} className="rounded-xl shadow-sm" />
+          <span className="text-sm font-semibold tracking-tight">{siteName}</span>
         </div>
 
         <div className="space-y-2 text-center lg:text-left">

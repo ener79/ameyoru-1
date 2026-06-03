@@ -11,6 +11,8 @@ interface Item {
   type: "NOTICE" | "ACTIVITY";
   title: string;
   content: string | null;
+  contentJson: string | null;
+  imagePath: string | null;
   isPermanent: boolean;
   endAt: string | null;
 }
@@ -51,6 +53,9 @@ export function LoginAnnouncements({
                   </Badge>
                 )}
               </div>
+              {item.imagePath && (
+                <img src={`/api/uploads/${item.imagePath}`} alt="" className="mt-2 rounded-md max-h-48 object-cover" />
+              )}
               {item.content && (
                 <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
                   {item.content}

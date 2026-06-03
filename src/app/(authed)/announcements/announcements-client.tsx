@@ -12,14 +12,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import { upsertAnnouncementAction, toggleAnnouncementAction, deleteAnnouncementAction } from "@/server/actions/announcements";
 import type { UpsertAnnouncementInput } from "@/server/actions/announcements";
+import type { JSONContent } from "@tiptap/react";
 
 interface Item {
   id: string;
   type: "NOTICE" | "ACTIVITY";
   title: string;
   content: string | null;
+  contentJson: string | null;
+  imagePath: string | null;
   isPermanent: boolean;
   startAt: string | null;
   endAt: string | null;
@@ -35,18 +39,22 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   const [showForm, setShowForm] = useState(false);
 
   const [form, setForm] = useState<UpsertAnnouncementInput>({
-    type: "NOTICE", title: "", content: "", isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
+    type: "NOTICE", title: "", content: "", contentJson: null, imagePath: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
   });
+  const [editorJson, setEditorJson] = useState<JSONContent | null>(null);
 
   function openNew() {
     setEditItem(null);
-    setForm({ type: "NOTICE", title: "", content: "", isPermanent: false, startAt: null, endAt: null, sortOrder: 0 });
+    setEditorJson(null);
+    setForm({ type: "NOTICE", title: "", content: "", contentJson: null, imagePath: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0 });
     setShowForm(true);
   }
 
   function openEdit(item: Item) {
     setEditItem(item);
-    setForm({ id: item.id, type: item.type, title: item.title, content: item.content ?? "", isPermanent: item.isPermanent, startAt: item.startAt?.slice(0, 16) ?? null, endAt: item.endAt?.slice(0, 16) ?? null, sortOrder: item.sortOrder });
+    const json = item.contentJson ? JSON.parse(item.contentJson) : null;
+    setEditorJson(json);
+    setForm({ id: item.id, type: item.type, title: item.title, content: item.content ?? "", contentJson: item.contentJson, imagePath: item.imagePath, isPermanent: item.isPermanent, startAt: item.startAt?.slice(0, 16) ?? null, endAt: item.endAt?.slice(0, 16) ?? null, sortOrder: item.sortOrder });
     setShowForm(true);
   }
 
@@ -126,7 +134,19 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
               </select>
             </div>
             <div><Label>标题</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-            <div><Label>内容</Label><textarea className="w-full border rounded px-3 py-2 text-sm mt-1 min-h-[80px]" value={form.content ?? ""} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
+            <div>
+              <Label>内容</Label>
+              <div className="mt-1">
+                <RichTextEditor
+                  key={editItem?.id ?? "new"}
+                  content={editorJson}
+                  onChange={(json) => {
+                    setEditorJson(json);
+                    setForm((f) => ({ ...f, contentJson: JSON.stringify(json) }));
+                  }}
+                />
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="perm" checked={form.isPermanent ?? false} onChange={(e) => setForm({ ...form, isPermanent: e.target.checked })} />
               <Label htmlFor="perm">长期有效</Label>

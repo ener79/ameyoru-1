@@ -14,6 +14,8 @@ const upsertSchema = z.object({
   type: z.enum(["NOTICE", "ACTIVITY"]),
   title: z.string().min(1).max(100),
   content: z.string().max(5000).optional().nullable(),
+  contentJson: z.string().max(100000).optional().nullable(),
+  imagePath: z.string().max(500).optional().nullable(),
   isPermanent: z.boolean().optional(),
   startAt: z.string().optional().nullable(),
   endAt: z.string().optional().nullable(),
@@ -33,26 +35,24 @@ export async function upsertAnnouncementAction(input: UpsertAnnouncementInput) {
   if (!parsed.success) return { ok: false as const, error: parsed.error.errors[0]?.message ?? "参数错误" };
   const d = parsed.data;
 
+  const shared = {
+    type: d.type,
+    title: d.title,
+    content: d.content ?? null,
+    contentJson: d.contentJson ?? null,
+    imagePath: d.imagePath ?? null,
+    isPermanent: d.isPermanent ?? false,
+    startAt: d.startAt ? new Date(d.startAt) : null,
+    endAt: d.endAt ? new Date(d.endAt) : null,
+    sortOrder: d.sortOrder ?? 0,
+  };
+
   if (d.id) {
-    await db.update(announcement).set({
-      type: d.type,
-      title: d.title,
-      content: d.content ?? null,
-      isPermanent: d.isPermanent ?? false,
-      startAt: d.startAt ? new Date(d.startAt) : null,
-      endAt: d.endAt ? new Date(d.endAt) : null,
-      sortOrder: d.sortOrder ?? 0,
-    }).where(eq(announcement.id, d.id));
+    await db.update(announcement).set(shared).where(eq(announcement.id, d.id));
   } else {
     await db.insert(announcement).values({
       id: nanoid(),
-      type: d.type,
-      title: d.title,
-      content: d.content ?? null,
-      isPermanent: d.isPermanent ?? false,
-      startAt: d.startAt ? new Date(d.startAt) : null,
-      endAt: d.endAt ? new Date(d.endAt) : null,
-      sortOrder: d.sortOrder ?? 0,
+      ...shared,
       enabled: true,
       createdById: me.id,
     });

@@ -29,6 +29,13 @@
       "when": 1780418639170,
       "tag": "0003_long_sharon_ventura",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1780500000000,
+      "tag": "0004_site_settings_and_rich_announcements",
+      "breakpoints": true
     }
   ]
 }

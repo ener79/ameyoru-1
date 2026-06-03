@@ -17,6 +17,7 @@ import {
   Moon,
   MoreHorizontal,
   ScrollText,
+  Settings,
   Sun,
   Trophy,
   UserCircle,
@@ -62,6 +63,10 @@ export interface AppSidebarProps {
     username: string;
     roleLabel: string;
   };
+  site?: {
+    siteName: string;
+    logoPath: string | null;
+  };
 }
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -77,6 +82,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   "/my-gifts": Gift,
   "/audit-log": ScrollText,
   "/payouts": Wallet,
+  "/site-settings": Settings,
 };
 
 const exactMatchPaths = new Set([
@@ -104,7 +110,9 @@ const themeOptions = [
   { value: "system", label: "跟随系统", icon: Monitor },
 ] as const;
 
-export function AppSidebar({ items, user }: AppSidebarProps) {
+export function AppSidebar({ items, user, site }: AppSidebarProps) {
+  const siteName = site?.siteName ?? "起点乱斗";
+  const logoSrc = site?.logoPath ? `/api/uploads/${site.logoPath}` : "/logo.png";
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -123,13 +131,10 @@ export function AppSidebar({ items, user }: AppSidebarProps) {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Image src="/logo.png" alt="起点乱斗" width={28} height={28} className="rounded-lg" />
+                  <Image src={logoSrc} alt={siteName} width={28} height={28} className="rounded-lg" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-bold">
-                    <span className="italic">起点</span>
-                    <span className="italic text-red-500">乱斗</span>
-                  </span>
+                  <span className="truncate font-bold">{siteName}</span>
                   <span className="truncate text-xs text-muted-foreground">内部管理系统</span>
                 </div>
               </Link>

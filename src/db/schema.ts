@@ -312,6 +312,8 @@ export const announcement = mysqlTable(
     type: mysqlEnum("type", ["NOTICE", "ACTIVITY"]).notNull().default("NOTICE"),
     title: varchar("title", { length: 100 }).notNull(),
     content: text("content"),
+    contentJson: text("content_json"),
+    imagePath: varchar("image_path", { length: 500 }),
     isPermanent: boolean("is_permanent").notNull().default(false),
     startAt: ts("start_at"),
     endAt: ts("end_at"),
@@ -324,6 +326,18 @@ export const announcement = mysqlTable(
   },
   (t) => [index("idx_announcement_enabled").on(t.enabled, t.sortOrder)]
 );
+
+export const siteSettings = mysqlTable("site_settings", {
+  id: varchar("id", { length: ID_LEN }).primaryKey(),
+  siteName: varchar("site_name", { length: 100 }).notNull().default("起点乱斗"),
+  logoPath: varchar("logo_path", { length: 500 }),
+  contactInfo: varchar("contact_info", { length: 500 }),
+  footerText: varchar("footer_text", { length: 500 }),
+  themeColor: varchar("theme_color", { length: 30 }).notNull().default("indigo"),
+  updatedAt: ts("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP(3)`),
+});
 
 export type AnnouncementType = "NOTICE" | "ACTIVITY";
 

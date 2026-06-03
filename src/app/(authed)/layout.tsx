@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth-helpers";
 import { AppSidebar, type NavItem } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getMyUnreadGiftCount } from "@/server/actions/gifts";
+import { getSiteSettings } from "@/server/actions/site-settings";
 import { db } from "@/db";
 import { giftRecord } from "@/db/schema";
 import type { Role } from "@/db/schema";
@@ -18,6 +19,7 @@ const bossNav: NavItem[] = [
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },
   { href: "/audit-log", label: "日志" },
+  { href: "/site-settings", label: "站点设置" },
 ];
 
 const staffNav: NavItem[] = [
@@ -30,6 +32,7 @@ const staffNav: NavItem[] = [
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },
+  { href: "/site-settings", label: "站点设置" },
 ];
 
 const playerNav: NavItem[] = [
@@ -58,7 +61,10 @@ export default async function AuthedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = await requireSession();
+  const [{ user }, siteSettingsData] = await Promise.all([
+    requireSession(),
+    getSiteSettings(),
+  ]);
   const nav = navForRole(user.role);
 
   let withBadges = nav;
@@ -105,6 +111,10 @@ export default async function AuthedLayout({
           displayName: user.name,
           username: user.username,
           roleLabel: roleLabel[user.role],
+        }}
+        site={{
+          siteName: siteSettingsData.siteName,
+          logoPath: siteSettingsData.logoPath,
         }}
       />
       <SidebarInset>

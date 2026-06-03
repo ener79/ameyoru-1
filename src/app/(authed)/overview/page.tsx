@@ -12,6 +12,8 @@ export default async function OverviewPage() {
     type: a.type,
     title: a.title,
     content: a.content,
+    contentJson: a.contentJson,
+    imagePath: a.imagePath,
     isPermanent: a.isPermanent,
     endAt: a.endAt?.toISOString() ?? null,
   }));
