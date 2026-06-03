@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { giftRecord, user, GIFT_TIER_CENTS } from "@/db/schema";
@@ -48,7 +48,12 @@ function invalidate() {
   revalidatePath("/gifts");
   revalidatePath("/my-gifts");
   revalidatePath("/leaderboard");
-  revalidatePath("/(authed)", "layout");
+  revalidatePath("/gifts", "layout");
+  revalidatePath("/my-gifts", "layout");
+}
+
+function giftVisibleAt() {
+  return sql<Date>`COALESCE(${giftRecord.settledAt}, ${giftRecord.createdAt})`;
 }
 
 /**
@@ -128,7 +133,7 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
       })
       .where(eq(giftRecord.id, d.id));
 
-    if (existing.playerId !== d.playerId) {
+    if (existing.playerId !== d.playerId && existing.settleStatus === "SETTLED") {
       await db
         .update(user)
         .set({ lastGiftSeenAt: null })
@@ -165,11 +170,6 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
       submitterId: me.id,
       settleStatus: "UNSETTLED",
     });
-    await db
-      .update(user)
-      .set({ lastGiftSeenAt: null })
-      .where(eq(user.id, d.playerId));
-
     logAudit({
       actorId: me.id,
       actorName: me.name,
@@ -447,7 +447,7 @@ export async function getMyUnreadGiftCount() {
     eq(giftRecord.playerId, me.id),
     eq(giftRecord.settleStatus, "SETTLED"),
   ];
-  if (since) baseConds.push(gte(giftRecord.createdAt, since));
+  if (since) baseConds.push(gt(giftVisibleAt(), since));
   const [row] = await db
     .select({ count: sql<number>`count(*)`.mapWith(Number) })
     .from(giftRecord)
@@ -466,12 +466,14 @@ export async function fetchAndMarkUnreadGifts() {
     .where(eq(user.id, me.id))
     .limit(1);
   const since = u?.lastGiftSeenAt ?? null;
+  const seenAt = new Date();
 
   const baseConds = [
     eq(giftRecord.playerId, me.id),
     eq(giftRecord.settleStatus, "SETTLED"),
+    lte(giftVisibleAt(), seenAt),
   ];
-  if (since) baseConds.push(gte(giftRecord.createdAt, since));
+  if (since) baseConds.push(gt(giftVisibleAt(), since));
   const rows = await db
     .select({
       id: giftRecord.id,
@@ -485,13 +487,15 @@ export async function fetchAndMarkUnreadGifts() {
     })
     .from(giftRecord)
     .where(and(...baseConds))
-    .orderBy(desc(giftRecord.createdAt))
+    .orderBy(desc(giftVisibleAt()), desc(giftRecord.createdAt))
     .limit(20);
 
   await db
     .update(user)
-    .set({ lastGiftSeenAt: new Date() })
+    .set({ lastGiftSeenAt: seenAt })
     .where(eq(user.id, me.id));
+
+  revalidatePath("/my-gifts", "layout");
 
   return rows.map((r) => ({
     ...r,
@@ -528,26 +532,14 @@ function rangeStart(range: z.infer<typeof rangeSchema>): Date | null {
  * 礼物打赏排行榜:只统计已支付的记录,展示"谁打赏谁"。
  */
 export async function giftLeaderboard(range: "today" | "week" | "month" | "all" = "all") {
-  await requireSession();
+  const { user: me } = await requireSession();
+  const isManager = me.role === "BOSS" || me.role === "STAFF";
   const r = rangeSchema.parse(range);
   const since = rangeStart(r);
 
   const baseConds = [eq(giftRecord.settleStatus, "SETTLED")];
-  if (since) baseConds.push(gte(giftRecord.createdAt, since));
+  if (since) baseConds.push(gte(giftVisibleAt(), since));
   const where = and(...baseConds);
-
-  const senderRows = await db
-    .select({
-      senderNickname: giftRecord.senderNickname,
-      totalCents: sql<number>`SUM(${giftRecord.totalCents})`.mapWith(Number),
-      giftCount: sql<number>`COUNT(*)`.mapWith(Number),
-      quantitySum: sql<number>`SUM(${giftRecord.quantity})`.mapWith(Number),
-    })
-    .from(giftRecord)
-    .where(where)
-    .groupBy(giftRecord.senderNickname)
-    .orderBy(sql`SUM(${giftRecord.totalCents}) DESC`)
-    .limit(50);
 
   const playerRows = await db
     .select({
@@ -561,6 +553,31 @@ export async function giftLeaderboard(range: "today" | "week" | "month" | "all" 
     .innerJoin(user, eq(user.id, giftRecord.playerId))
     .where(where)
     .groupBy(giftRecord.playerId, user.name)
+    .orderBy(sql`SUM(${giftRecord.totalCents}) DESC`)
+    .limit(50);
+
+  if (!isManager) {
+    return {
+      senders: [],
+      players: playerRows.map((p) => ({
+        ...p,
+        totalCents: null,
+        earnCents: p.playerId === me.id ? p.earnCents : null,
+      })),
+      pairs: [],
+    };
+  }
+
+  const senderRows = await db
+    .select({
+      senderNickname: giftRecord.senderNickname,
+      totalCents: sql<number>`SUM(${giftRecord.totalCents})`.mapWith(Number),
+      giftCount: sql<number>`COUNT(*)`.mapWith(Number),
+      quantitySum: sql<number>`SUM(${giftRecord.quantity})`.mapWith(Number),
+    })
+    .from(giftRecord)
+    .where(where)
+    .groupBy(giftRecord.senderNickname)
     .orderBy(sql`SUM(${giftRecord.totalCents}) DESC`)
     .limit(50);
 

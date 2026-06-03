@@ -22,6 +22,10 @@ export function AnnouncementsBanner({ items }: { items: AnnouncementItem[] }) {
   const activities = items.filter((i) => i.type === "ACTIVITY");
   const showToggle = items.length > 2;
   const visible = expanded ? items : items.slice(0, 2);
+  const formatEndDate = (date: string) =>
+    new Date(date).toLocaleDateString("zh-CN", {
+      timeZone: "Asia/Shanghai",
+    });
 
   return (
     <div className="space-y-2 mb-4">
@@ -35,7 +39,7 @@ export function AnnouncementsBanner({ items }: { items: AnnouncementItem[] }) {
               <span className="font-bold text-base">{item.title}</span>
               {item.type === "ACTIVITY" && (
                 <Badge variant="outline" className="text-[10px]">
-                  {item.isPermanent ? "长期有效" : item.endAt ? `截止 ${new Date(item.endAt).toLocaleDateString()}` : "活动"}
+                  {item.isPermanent ? "长期有效" : item.endAt ? `截止 ${formatEndDate(item.endAt)}` : "活动"}
                 </Badge>
               )}
             </div>

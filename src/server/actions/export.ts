@@ -11,7 +11,10 @@ import { requireSession } from "@/lib/auth-helpers";
 import { centsToYuanString, formatDateTime, formatDuration } from "@/lib/format";
 
 function toCSV(headers: string[], rows: string[][]): string {
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const neutralizeFormula = (v: string) =>
+    /^[=+\-@]/.test(v) ? `'${v}` : v;
+  const escape = (v: string) =>
+    `"${neutralizeFormula(v).replace(/"/g, '""')}"`;
   return [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
 }
 

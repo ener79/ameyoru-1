@@ -14,7 +14,9 @@ export function centsToYuanString(cents: number | null | undefined): string {
 
 /** 用户输入的元(可能带小数)转为整数分 */
 export function yuanStringToCents(yuan: string): number {
-  const n = parseFloat(yuan);
+  const normalized = yuan.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return 0;
+  const n = Number(normalized);
   if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100);
 }

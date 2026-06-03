@@ -14,6 +14,7 @@ export const auth = betterAuth({
   // 我们用 username 登录,email 字段在 schema 里仍存在(伪 email)
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
     autoSignIn: false,
     requireEmailVerification: false,
     minPasswordLength: 6,

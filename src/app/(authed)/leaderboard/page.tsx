@@ -46,7 +46,9 @@ export default async function LeaderboardPage({
         title="排行榜"
         description={
           type === "gifts"
-            ? "礼物打赏排行 — 看看谁是大方的金主,谁是被宠的陪玩"
+            ? me.role === "BOSS" || me.role === "STAFF"
+              ? "礼物打赏排行,展示打赏人和陪玩收入关系"
+              : "礼物打赏排行,只能看见自己的具体收益"
             : me.role === "BOSS" || me.role === "STAFF"
             ? "按总时长排序,显示每位陪玩的接单情况"
             : "按总时长排序,只能看见自己的具体收益"
@@ -82,7 +84,7 @@ export default async function LeaderboardPage({
       </div>
 
       {type === "gifts" ? (
-        <GiftsBoard sp={sp} />
+        <GiftsBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF"} />
       ) : (
         <OrdersBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF"} />
       )}
@@ -238,14 +240,22 @@ async function OrdersBoard({
 
 /* ============================ 礼物打赏排行 ============================ */
 
-async function GiftsBoard({ sp }: { sp: { range?: string; view?: string } }) {
+async function GiftsBoard({
+  sp,
+  myId,
+  isBoss,
+}: {
+  sp: { range?: string; view?: string };
+  myId: string;
+  isBoss: boolean;
+}) {
   const range = (giftRanges.includes(sp.range as (typeof giftRanges)[number])
     ? sp.range
     : "all") as (typeof giftRanges)[number];
-  const view = (sp.view === "senders" || sp.view === "players" ? sp.view : "pairs") as
-    | "pairs"
-    | "senders"
-    | "players";
+  const requestedView = (
+    sp.view === "senders" || sp.view === "players" ? sp.view : "pairs"
+  ) as "pairs" | "senders" | "players";
+  const view = isBoss ? requestedView : "players";
 
   const { senders, players, pairs } = await giftLeaderboard(range);
   const isEmpty =
@@ -283,30 +293,31 @@ async function GiftsBoard({ sp }: { sp: { range?: string; view?: string } }) {
         </div>
       </div>
 
-      {/* 视图切换 */}
-      <div className="mb-6 inline-flex h-9 items-center justify-center rounded-lg bg-muted p-[3px]">
-        {(
-          [
-            { key: "pairs", label: "谁打赏谁" },
-            { key: "senders", label: "打赏大佬榜" },
-            { key: "players", label: "受宠陪玩榜" },
-          ] as const
-        ).map((v) => (
-          <Link
-            key={v.key}
-            href={viewHref(v.key)}
-            scroll={false}
-            className={cn(
-              "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
-              v.key === view
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {v.label}
-          </Link>
-        ))}
-      </div>
+      {isBoss && (
+        <div className="mb-6 inline-flex h-9 items-center justify-center rounded-lg bg-muted p-[3px]">
+          {(
+            [
+              { key: "pairs", label: "谁打赏谁" },
+              { key: "senders", label: "打赏大佬榜" },
+              { key: "players", label: "受宠陪玩榜" },
+            ] as const
+          ).map((v) => (
+            <Link
+              key={v.key}
+              href={viewHref(v.key)}
+              scroll={false}
+              className={cn(
+                "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
+                v.key === view
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {v.label}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {isEmpty ? (
         <EmptyState
@@ -319,7 +330,7 @@ async function GiftsBoard({ sp }: { sp: { range?: string; view?: string } }) {
       ) : view === "senders" ? (
         <SenderList senders={senders} />
       ) : (
-        <PlayerList players={players} />
+        <PlayerList players={players} isBoss={isBoss} myId={myId} />
       )}
     </>
   );
@@ -441,14 +452,18 @@ function SenderList({
 
 function PlayerList({
   players,
+  isBoss,
+  myId,
 }: {
   players: {
     playerId: string;
     playerName: string;
-    totalCents: number;
-    earnCents: number;
+    totalCents: number | null;
+    earnCents: number | null;
     giftCount: number;
   }[];
+  isBoss: boolean;
+  myId: string;
 }) {
   return (
     <Card className="overflow-hidden p-0">
@@ -456,6 +471,7 @@ function PlayerList({
         {players.map((p, i) => {
           const rank = i + 1;
           const emoji = rankBadge(rank);
+          const isMe = p.playerId === myId;
           return (
             <li
               key={p.playerId}
@@ -471,17 +487,38 @@ function PlayerList({
                 <AvatarFallback>{avatarInitial(p.playerName)}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold truncate">{p.playerName}</div>
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <span className="truncate">{p.playerName}</span>
+                  {isMe && (
+                    <Badge variant="outline" className="text-[10px]">
+                      我
+                    </Badge>
+                  )}
+                </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
-                  收到 {p.giftCount} 笔打赏 · 到手{" "}
-                  <span className="font-mono">{formatYuan(p.earnCents)}</span>
+                  收到 {p.giftCount} 笔打赏
+                  {isBoss && p.earnCents != null && (
+                    <>
+                      {" · 到手 "}
+                      <span className="font-mono">{formatYuan(p.earnCents)}</span>
+                    </>
+                  )}
+                  {!isBoss && isMe && p.earnCents != null && (
+                    <>
+                      {" · 我的到手 "}
+                      <span className="font-mono">{formatYuan(p.earnCents)}</span>
+                    </>
+                  )}
                 </div>
               </div>
-              <div className="shrink-0 text-right font-mono tabular-nums">
-                <div className="font-semibold text-pink-600">
-                  {formatYuan(p.totalCents)}
+              {(isBoss || isMe) && (
+                <div className="shrink-0 text-right font-mono tabular-nums">
+                  <div className="font-semibold text-pink-600">
+                    {formatYuan(isBoss ? p.totalCents ?? 0 : p.earnCents ?? 0)}
+                  </div>
+                  {!isBoss && <div className="text-[11px] text-muted-foreground">我的到手</div>}
                 </div>
-              </div>
+              )}
             </li>
           );
         })}

@@ -21,6 +21,19 @@ export interface ImageUpload {
   ext: string;
 }
 
+export function contentTypeForImageExt(ext: string): string | null {
+  const normalized = ext.toLowerCase();
+  if (normalized === "png") return "image/png";
+  if (normalized === "jpg" || normalized === "jpeg") return "image/jpeg";
+  if (normalized === "webp") return "image/webp";
+  if (normalized === "gif") return "image/gif";
+  if (normalized === "bmp") return "image/bmp";
+  if (normalized === "avif") return "image/avif";
+  if (normalized === "heic") return "image/heic";
+  if (normalized === "heif") return "image/heif";
+  return null;
+}
+
 function detectImageUpload(bytes: Buffer): { ext: string } | null {
   if (
     bytes.length >= 8 &&

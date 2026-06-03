@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
     // 邀请注册会同时上传微信/支付宝两张收款码,单张仍由业务层限制 20MB。
     serverActions: { bodySizeLimit: "45mb" },
   },
-  serverExternalPackages: ["better-sqlite3"],
 };
 
 export default nextConfig;

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "TZ=Asia/Shanghai next dev",
-    "build": "next build",
+    "build": "TZ=Asia/Shanghai next build",
     "start": "TZ=Asia/Shanghai next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",

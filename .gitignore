@@ -1,6 +1,6 @@
 node_modules/
 data/
 .env
-uploads/
+/uploads/
 __MACOSX/
 .next/

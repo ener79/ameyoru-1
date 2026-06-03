@@ -25,6 +25,35 @@ const UPLOAD_ROOT = join(process.cwd(), "uploads");
 const MAX_BYTES = 20 * 1024 * 1024;
 const QR_EXTS = ["png", "jpg", "webp", "gif", "bmp", "avif", "heic", "heif"];
 
+function getAffectedRows(result: unknown): number {
+  const candidate = Array.isArray(result) ? result[0] : result;
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    "affectedRows" in candidate &&
+    typeof candidate.affectedRows === "number"
+  ) {
+    return candidate.affectedRows;
+  }
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    "rowsAffected" in candidate &&
+    typeof candidate.rowsAffected === "number"
+  ) {
+    return candidate.rowsAffected;
+  }
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    "changes" in candidate &&
+    typeof candidate.changes === "number"
+  ) {
+    return candidate.changes;
+  }
+  return 0;
+}
+
 const usernameField = z
   .string()
   .min(2, "用户名至少 2 位")
@@ -143,34 +172,52 @@ async function createUser(opts: {
   if (dup) return { ok: false, error: "用户名已存在" };
 
   const initialPassword = password ?? generateInitialPassword();
+  const ctx = await auth.$context;
+  const passwordHash = await ctx.password.hash(initialPassword);
 
   try {
-    await auth.api.signUpEmail({
-      body: {
-        email: `${nanoid(12)}@${INTERNAL_EMAIL_DOMAIN}`,
-        password: initialPassword,
-        name: displayName,
-        username,
-      },
-    });
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "创建失败",
-    };
-  }
-
-  // role 默认为 PLAYER;additionalFields input:false 不能由 API 设,这里 update
-  await db
-    .update(user)
-    .set({
+    const createdUser = await ctx.internalAdapter.createUser({
+      email: `${nanoid(12)}@${INTERNAL_EMAIL_DOMAIN}`,
+      name: displayName,
+      emailVerified: true,
+      username,
+      displayUsername: username,
       role,
       defaultRateCents: defaultRateCents ?? null,
       playerGender: playerGender ?? null,
       mustChangePwd,
       qrSecurityCodeHash: qrSecurityCodeHash ?? null,
-    })
-    .where(eq(user.username, username));
+    });
+    if (!createdUser?.id) {
+      return { ok: false, error: "创建失败" };
+    }
+
+    try {
+      await ctx.internalAdapter.createAccount({
+        userId: createdUser.id,
+        providerId: "credential",
+        accountId: createdUser.id,
+        password: passwordHash,
+      });
+    } catch (e) {
+      await db.delete(user).where(eq(user.id, createdUser.id)).catch(() => {});
+      throw e;
+    }
+  } catch (e) {
+    const [existing] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.username, username))
+      .limit(1);
+    if (existing) {
+      return { ok: false, error: "用户名已存在" };
+    }
+
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "创建失败",
+    };
+  }
 
   return { ok: true, initialPassword, username, displayName };
 }
@@ -487,15 +534,24 @@ export async function completePlayerInviteAction(
     return { ok: false, error: "创建失败" };
   }
 
-  // 账号真正创建成功后才消耗名额,避免用户名冲突等失败把单次邀请烧掉
-  await db
+  const consumeResult = await db
     .update(playerInvite)
     .set({
       useCount: sql`${playerInvite.useCount} + 1`,
       usedAt: new Date(),
       usedById: created.id,
     })
-    .where(eq(playerInvite.id, inviteId));
+    .where(
+      and(
+        eq(playerInvite.id, inviteId),
+        sql`${playerInvite.expiresAt} >= ${new Date()}`,
+        sql`(${playerInvite.maxUses} = 0 OR ${playerInvite.useCount} < ${playerInvite.maxUses})`
+      )
+    );
+  if (getAffectedRows(consumeResult) !== 1) {
+    await db.delete(user).where(eq(user.id, created.id));
+    return { ok: false, error: "链接已达使用上限或已过期" };
+  }
 
   await saveInviteQr(wechatUpload.upload, created.id, "WECHAT");
   await saveInviteQr(alipayUpload.upload, created.id, "ALIPAY");

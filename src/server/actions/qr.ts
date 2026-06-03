@@ -93,6 +93,7 @@ export async function uploadQrCodeAction(formData: FormData) {
 
   revalidatePath("/profile");
   revalidatePath("/orders");
+  revalidatePath("/gifts");
   return { ok: true as const, path: `qr/${filename}` };
 }
 
@@ -121,5 +122,6 @@ export async function deleteQrCodeAction(input: {
   await db.update(user).set({ [field]: null }).where(eq(user.id, me.id));
   revalidatePath("/profile");
   revalidatePath("/orders");
+  revalidatePath("/gifts");
   return { ok: true as const };
 }

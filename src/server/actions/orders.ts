@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { order, customer, customerBalanceTxn, user } from "@/db/schema";
@@ -17,6 +17,40 @@ import {
   notifyOrderSettled,
   notifyOrderCanceled,
 } from "@/lib/wecom";
+
+const CANCELABLE_ORDER_STATUSES = ["IN_PROGRESS", "COMPLETED"] as const;
+
+function settlableOrderCondition() {
+  return or(
+    eq(order.orderStatus, "COMPLETED"),
+    and(
+      eq(order.orderStatus, "CANCELED"),
+      gt(order.playerCompensationCents, 0)
+    )
+  );
+}
+
+function getAffectedRows(result: unknown): number {
+  if (typeof result === "object" && result !== null) {
+    if ("affectedRows" in result) {
+      const value = (result as { affectedRows: unknown }).affectedRows;
+      if (typeof value === "number") return value;
+    }
+    if ("rowsAffected" in result) {
+      const value = (result as { rowsAffected: unknown }).rowsAffected;
+      if (typeof value === "number") return value;
+    }
+  }
+
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      const value = getAffectedRows(item);
+      if (value > 0) return value;
+    }
+  }
+
+  return 0;
+}
 
 const optionalTrimmed = (max: number) =>
   z
@@ -421,6 +455,9 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   if (target.orderStatus === "CANCELED") {
     return { ok: false as const, error: "订单已取消" };
   }
+  if (target.settleStatus !== "UNSETTLED") {
+    return { ok: false as const, error: "已结算的订单不能取消" };
+  }
 
   const compensationCents = compensationYuan
     ? Math.max(0, yuanStringToCents(compensationYuan))
@@ -433,39 +470,55 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   const now = new Date();
   const noCompensation = compensationCents === 0;
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(order)
-      .set({
-        orderStatus: "CANCELED",
-        canceledAt: now,
-        cancelFault: fault,
-        cancelNote: note,
-        playerCompensationCents: compensationCents,
-        settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
-        settledAt: noCompensation ? now : null,
-        paidMethod: null,
-      })
-      .where(eq(order.id, id));
-
-    if (target.prepayUsedCents > 0) {
-      await tx
-        .update(customer)
+  try {
+    await db.transaction(async (tx) => {
+      const result = await tx
+        .update(order)
         .set({
-          balanceCents: sql`${customer.balanceCents} + ${target.prepayUsedCents}`,
+          orderStatus: "CANCELED",
+          canceledAt: now,
+          cancelFault: fault,
+          cancelNote: note,
+          playerCompensationCents: compensationCents,
+          settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
+          settledAt: noCompensation ? now : null,
+          paidMethod: null,
         })
-        .where(eq(customer.id, target.customerId));
-      await tx.insert(customerBalanceTxn).values({
-        id: nanoid(),
-        customerId: target.customerId,
-        orderId: id,
-        type: "ORDER_REFUND",
-        amountCents: target.prepayUsedCents,
-        note: "订单取消退回预存",
-        createdById: me.id,
-      });
+        .where(
+          and(
+            eq(order.id, id),
+            eq(order.settleStatus, "UNSETTLED"),
+            inArray(order.orderStatus, CANCELABLE_ORDER_STATUSES)
+          )
+        );
+      if (getAffectedRows(result) !== 1) {
+        throw new Error("ORDER_STATE_CHANGED");
+      }
+
+      if (target.prepayUsedCents > 0) {
+        await tx
+          .update(customer)
+          .set({
+            balanceCents: sql`${customer.balanceCents} + ${target.prepayUsedCents}`,
+          })
+          .where(eq(customer.id, target.customerId));
+        await tx.insert(customerBalanceTxn).values({
+          id: nanoid(),
+          customerId: target.customerId,
+          orderId: id,
+          type: "ORDER_REFUND",
+          amountCents: target.prepayUsedCents,
+          note: "订单取消退回预存",
+          createdById: me.id,
+        });
+      }
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "ORDER_STATE_CHANGED") {
+      return { ok: false as const, error: "订单状态已变化,请刷新后重试" };
     }
-  });
+    throw e;
+  }
   invalidatePages(id);
 
   notifyOrderCanceled({
@@ -484,10 +537,46 @@ export async function settleOrderAction(input: {
   paidMethod?: "WECHAT" | "ALIPAY";
 }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const result = await db
+    .update(order)
+    .set({
+      settleStatus: "SETTLED",
+      settledAt: new Date(),
+      paidMethod: input.paidMethod ?? null,
+    })
+    .where(
+      and(
+        eq(order.id, input.id),
+        eq(order.settleStatus, "UNSETTLED"),
+        settlableOrderCondition()
+      )
+    );
+  if (getAffectedRows(result) !== 1) {
+    const [current] = await db
+      .select({
+        orderStatus: order.orderStatus,
+        settleStatus: order.settleStatus,
+        playerCompensationCents: order.playerCompensationCents,
+      })
+      .from(order)
+      .where(eq(order.id, input.id))
+      .limit(1);
+    if (!current) return { ok: false as const, error: "订单不存在" };
+    if (current.settleStatus === "SETTLED") {
+      return { ok: false as const, error: "已结算,请勿重复操作" };
+    }
+    if (
+      current.orderStatus === "CANCELED" &&
+      current.playerCompensationCents <= 0
+    ) {
+      return { ok: false as const, error: "取消订单无补偿,无需结算" };
+    }
+    return { ok: false as const, error: "订单尚未完成或取消,无法结算" };
+  }
+
   const [target] = await db
     .select({
       orderStatus: order.orderStatus,
-      settleStatus: order.settleStatus,
       playerEarnCents: order.playerEarnCents,
       playerCompensationCents: order.playerCompensationCents,
     })
@@ -495,23 +584,6 @@ export async function settleOrderAction(input: {
     .where(eq(order.id, input.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
-  // 已完成 或 取消+有补偿 都可以结算
-  const canSettle =
-    target.orderStatus === "COMPLETED" || target.orderStatus === "CANCELED";
-  if (!canSettle) {
-    return { ok: false as const, error: "订单尚未完成或取消,无法结算" };
-  }
-  if (target.settleStatus === "SETTLED") {
-    return { ok: false as const, error: "已结算,请勿重复操作" };
-  }
-  await db
-    .update(order)
-    .set({
-      settleStatus: "SETTLED",
-      settledAt: new Date(),
-      paidMethod: input.paidMethod ?? null,
-    })
-    .where(eq(order.id, input.id));
   invalidatePages(input.id);
 
   // 取消单结算时金额是补偿,完成单是应得
@@ -531,10 +603,13 @@ export async function settleOrderAction(input: {
 
 export async function unsettleOrderAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  await db
+  const result = await db
     .update(order)
     .set({ settleStatus: "UNSETTLED", settledAt: null, paidMethod: null })
-    .where(eq(order.id, input.id));
+    .where(and(eq(order.id, input.id), eq(order.settleStatus, "SETTLED")));
+  if (getAffectedRows(result) !== 1) {
+    return { ok: false as const, error: "订单不存在或未结算" };
+  }
   logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id });
   invalidatePages(input.id);
   return { ok: true as const };
@@ -548,36 +623,35 @@ export async function batchSettleAction(input: {
   if (!input.ids.length) return { ok: false as const, error: "没有选中订单" };
   if (input.ids.length > 200) return { ok: false as const, error: "单次最多批量结算200单" };
 
+  const uniqueIds = Array.from(new Set(input.ids));
   const now = new Date();
   let settled = 0;
 
   await db.transaction(async (tx) => {
-    // 批量查询所有目标订单
-    const targets = await tx
-      .select({ id: order.id, orderStatus: order.orderStatus, settleStatus: order.settleStatus })
-      .from(order)
-      .where(inArray(order.id, input.ids));
-
-    // 筛选可结算的
-    const eligibleIds = targets
-      .filter((t) => t.settleStatus === "UNSETTLED" && (t.orderStatus === "COMPLETED" || t.orderStatus === "CANCELED"))
-      .map((t) => t.id);
-
-    if (eligibleIds.length > 0) {
-      await tx
-        .update(order)
-        .set({ settleStatus: "SETTLED", settledAt: now, paidMethod: input.paidMethod ?? null })
-        .where(inArray(order.id, eligibleIds));
-      settled = eligibleIds.length;
-    }
+    const result = await tx
+      .update(order)
+      .set({
+        settleStatus: "SETTLED",
+        settledAt: now,
+        paidMethod: input.paidMethod ?? null,
+      })
+      .where(
+        and(
+          inArray(order.id, uniqueIds),
+          eq(order.settleStatus, "UNSETTLED"),
+          settlableOrderCondition()
+        )
+      );
+    settled = getAffectedRows(result);
   });
 
   if (settled > 0) {
     logAudit({ actorId: me.id, actorName: me.name, action: "BATCH_SETTLE", targetType: "order", detail: { count: settled, paidMethod: input.paidMethod } });
+    revalidatePath("/overview");
+    revalidatePath("/orders");
+    revalidatePath("/payouts");
+    revalidatePath("/leaderboard");
+    revalidatePath("/customers");
   }
-
-  revalidatePath("/overview");
-  revalidatePath("/orders");
-  revalidatePath("/payouts");
   return { ok: true as const, count: settled };
 }

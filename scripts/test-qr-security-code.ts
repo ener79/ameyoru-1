@@ -19,7 +19,7 @@ const playersPage = read("src/app/(authed)/players/page.tsx");
 const playersClient = read("src/app/(authed)/players/players-client.tsx");
 const migrate = read("scripts/migrate-qr-security.ts");
 
-assert.match(schema, /qrSecurityCodeHash:\s*text\("qr_security_code_hash"\)/);
+assert.match(schema, /qrSecurityCodeHash:\s*varchar\("qr_security_code_hash"/);
 assert.match(auth, /qrSecurityCodeHash/);
 assert.match(read("src/lib/qr-security.ts"), /qrSecurityCodeSchema/);
 
@@ -36,7 +36,7 @@ assert.match(imageUpload, /GIF89a|GIF87a/);
 assert.match(imageUpload, /0x42/);
 assert.match(imageUpload, /avif/);
 assert.match(imageUpload, /heic/);
-assert.match(uploadRoute, /heif:\s*"image\/heif"/);
+assert.match(uploadRoute, /contentTypeForImageExt/);
 
 assert.match(usersAction, /qrSecurityCodeSchema/);
 assert.match(usersAction, /qrSecurityCodeHash/);

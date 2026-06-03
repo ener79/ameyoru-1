@@ -3,8 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { clearMustChangePwdAction } from "@/server/actions/me";
+import { changeOwnPasswordAction } from "@/server/actions/me";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,18 +25,12 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
       return;
     }
     startTransition(async () => {
-      const { error } = await authClient.changePassword({
+      const res = await changeOwnPasswordAction({
         currentPassword: current,
         newPassword: next,
-        revokeOtherSessions: true,
       });
-      if (error) {
-        toast.error(error.message ?? "改密失败");
-        return;
-      }
-      const res = await clearMustChangePwdAction();
       if (!res.ok) {
-        toast.error("更新状态失败,请重新登录");
+        toast.error(res.error ?? "改密失败");
         return;
       }
       toast.success("密码已更新");

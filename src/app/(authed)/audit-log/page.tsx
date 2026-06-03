@@ -9,6 +9,14 @@ import { EmptyState } from "@/components/empty-state";
 import { ClipboardList } from "lucide-react";
 import { formatRelativeDateTime } from "@/lib/format";
 
+type BadgeVariant =
+  | "default"
+  | "secondary"
+  | "destructive"
+  | "success"
+  | "warning"
+  | "outline";
+
 const ACTION_LABEL: Record<string, string> = {
   CREATE_ORDER: "创建订单",
   COMPLETE_ORDER: "标记完成",
@@ -34,26 +42,43 @@ const ACTION_LABEL: Record<string, string> = {
   ENABLE_ANNOUNCEMENT: "启用公告",
   DISABLE_ANNOUNCEMENT: "禁用公告",
   CREATE_GIFT_RECORD: "添加礼物记录",
+  CREATE_GIFT_REPORT: "提交礼物报单",
   UPDATE_GIFT_RECORD: "修改礼物记录",
   DELETE_GIFT_RECORD: "删除礼物记录",
+  SETTLE_GIFT: "支付礼物",
+  UNSETTLE_GIFT: "撤销礼物支付",
 };
 
-const ACTION_COLOR: Record<string, string> = {
+const ACTION_COLOR: Record<string, BadgeVariant> = {
   CREATE_ORDER: "default",
   COMPLETE_ORDER: "secondary",
-  SETTLE_ORDER: "default",
+  SETTLE_ORDER: "success",
   CANCEL_ORDER: "destructive",
   UNSETTLE_ORDER: "outline",
-  CREATE_PLAYER: "创建陪玩",
-  ENABLE_USER: "启用用户",
-  DISABLE_USER: "停用用户",
-  BATCH_SETTLE: "批量结算",
-  ADJUST_ORDER_DURATION: "调整时长",
-  MARK_DEPOSIT_PAID: "标记已缴押金",
-  MARK_DEPOSIT_UNPAID: "取消押金标记",
-  CREATE_PLAYER_INVITE: "创建邀请链接",
-  DELETE_PLAYER_INVITE: "删除邀请链接",
-  ENABLE_ANNOUNCEMENT: "启用公告",
+  CREATE_USER: "default",
+  UPDATE_USER: "secondary",
+  TOGGLE_USER: "outline",
+  CREATE_ANNOUNCEMENT: "default",
+  UPDATE_ANNOUNCEMENT: "secondary",
+  DELETE_ANNOUNCEMENT: "destructive",
+  TOGGLE_ANNOUNCEMENT: "outline",
+  CREATE_PLAYER: "default",
+  ENABLE_USER: "success",
+  DISABLE_USER: "destructive",
+  BATCH_SETTLE: "success",
+  ADJUST_ORDER_DURATION: "secondary",
+  MARK_DEPOSIT_PAID: "success",
+  MARK_DEPOSIT_UNPAID: "outline",
+  CREATE_PLAYER_INVITE: "default",
+  DELETE_PLAYER_INVITE: "destructive",
+  ENABLE_ANNOUNCEMENT: "success",
+  DISABLE_ANNOUNCEMENT: "destructive",
+  CREATE_GIFT_RECORD: "default",
+  CREATE_GIFT_REPORT: "default",
+  UPDATE_GIFT_RECORD: "secondary",
+  DELETE_GIFT_RECORD: "destructive",
+  SETTLE_GIFT: "success",
+  UNSETTLE_GIFT: "outline",
 };
 
 export default async function AuditLogPage() {
@@ -81,7 +106,7 @@ export default async function AuditLogPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium">{log.actorName}</span>
-                      <Badge variant={(ACTION_COLOR[log.action] as "default" | "secondary" | "destructive" | "outline") ?? "outline"} className="text-[10px]">
+                      <Badge variant={ACTION_COLOR[log.action] ?? "outline"} className="text-[10px]">
                         {ACTION_LABEL[log.action] ?? log.action}
                       </Badge>
                       {log.targetId && (
