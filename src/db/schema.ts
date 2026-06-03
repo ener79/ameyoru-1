@@ -333,7 +333,8 @@ export const siteSettings = mysqlTable("site_settings", {
   logoPath: varchar("logo_path", { length: 500 }),
   contactInfo: varchar("contact_info", { length: 500 }),
   footerText: varchar("footer_text", { length: 500 }),
-  themeColor: varchar("theme_color", { length: 30 }).notNull().default("indigo"),
+  themePreset: varchar("theme_preset", { length: 30 }).notNull().default("default"),
+  customThemeCSS: text("custom_theme_css"),
   updatedAt: ts("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP(3)`),

@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSiteSettings } from "@/server/actions/site-settings";
-import { themeColorCSS, type ThemeColorKey } from "@/lib/theme-colors";
+import { getPresetCSS } from "@/lib/theme-presets";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -32,7 +32,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const settings = await getSiteSettings();
-  const css = themeColorCSS(settings.themeColor as ThemeColorKey);
+  const css = settings.customThemeCSS || getPresetCSS(settings.themePreset);
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>

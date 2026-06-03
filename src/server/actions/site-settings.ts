@@ -9,21 +9,22 @@ import { db } from "@/db";
 import { siteSettings } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { readImageUpload } from "@/lib/image-upload";
-import { THEME_COLOR_OPTIONS, type ThemeColorKey } from "@/lib/theme-colors";
+import { THEME_PRESETS, validateCustomCSS } from "@/lib/theme-presets";
 import { nanoid } from "../id";
 import { logAudit } from "../audit";
 
 const UPLOAD_ROOT = join(process.cwd(), "uploads");
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const LOGO_EXTS = ["png", "jpg", "webp", "gif", "avif"];
-const THEME_KEYS = THEME_COLOR_OPTIONS.map((o) => o.key) as [string, ...string[]];
+const PRESET_KEYS = THEME_PRESETS.map((p) => p.key) as [string, ...string[]];
 
 const DEFAULT_SETTINGS = {
   siteName: "起点乱斗",
   logoPath: null as string | null,
   contactInfo: null as string | null,
   footerText: null as string | null,
-  themeColor: "indigo" as ThemeColorKey,
+  themePreset: "default",
+  customThemeCSS: null as string | null,
 };
 
 export async function getSiteSettings() {
@@ -33,22 +34,20 @@ export async function getSiteSettings() {
       logoPath: siteSettings.logoPath,
       contactInfo: siteSettings.contactInfo,
       footerText: siteSettings.footerText,
-      themeColor: siteSettings.themeColor,
+      themePreset: siteSettings.themePreset,
+      customThemeCSS: siteSettings.customThemeCSS,
     })
     .from(siteSettings)
     .limit(1);
-  if (!row) return DEFAULT_SETTINGS;
-  return {
-    ...row,
-    themeColor: (row.themeColor ?? "indigo") as ThemeColorKey,
-  };
+  return row ?? DEFAULT_SETTINGS;
 }
 
 const updateSchema = z.object({
   siteName: z.string().min(1, "请填写站点名称").max(100),
   contactInfo: z.string().max(500).optional().nullable().transform((s) => s?.trim() || null),
   footerText: z.string().max(500).optional().nullable().transform((s) => s?.trim() || null),
-  themeColor: z.enum(THEME_KEYS),
+  themePreset: z.enum(PRESET_KEYS),
+  customThemeCSS: z.string().max(10240).optional().nullable().transform((s) => s?.trim() || null),
 });
 
 export async function updateSiteSettingsAction(formData: FormData) {
@@ -58,11 +57,17 @@ export async function updateSiteSettingsAction(formData: FormData) {
     siteName: String(formData.get("siteName") ?? ""),
     contactInfo: formData.get("contactInfo") || null,
     footerText: formData.get("footerText") || null,
-    themeColor: String(formData.get("themeColor") ?? "indigo"),
+    themePreset: String(formData.get("themePreset") ?? "default"),
+    customThemeCSS: formData.get("customThemeCSS") || null,
   };
   const parsed = updateSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.errors[0]?.message ?? "参数错误" };
+  }
+
+  if (parsed.data.customThemeCSS) {
+    const err = validateCustomCSS(parsed.data.customThemeCSS);
+    if (err) return { ok: false as const, error: err };
   }
 
   let logoPath: string | null | undefined;
@@ -89,7 +94,8 @@ export async function updateSiteSettingsAction(formData: FormData) {
     siteName: parsed.data.siteName,
     contactInfo: parsed.data.contactInfo,
     footerText: parsed.data.footerText,
-    themeColor: parsed.data.themeColor,
+    themePreset: parsed.data.themePreset,
+    customThemeCSS: parsed.data.customThemeCSS,
     updatedAt: new Date(),
     ...(logoPath !== undefined ? { logoPath } : {}),
   };
