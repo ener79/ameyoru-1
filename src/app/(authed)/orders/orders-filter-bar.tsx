@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +17,7 @@ interface OrdersFilterBarProps {
 
 export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersFilterBarProps) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -71,14 +71,18 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersF
       {/* Search + date range */}
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          {pending ? (
+            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          )}
           <Input
             defaultValue={q}
             placeholder={isManager ? "搜索客户名/陪玩名/会员号…" : "搜索客户名…"}
             className="pl-9 pr-8"
             onChange={(e) => handleSearch(e.target.value)}
           />
-          {q && (
+          {q && !pending && (
             <button
               onClick={clearSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"

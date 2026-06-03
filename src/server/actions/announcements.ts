@@ -24,13 +24,19 @@ const upsertSchema = z.object({
 
 export type UpsertAnnouncementInput = z.input<typeof upsertSchema>;
 
-/** 富文本由可信后台编辑生成,这里再做一层防御性消毒 */
+import DOMPurify from "isomorphic-dompurify";
+
 function sanitizeHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
-    .replace(/javascript:/gi, "");
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      "p", "br", "strong", "em", "u", "s",
+      "h1", "h2", "h3",
+      "ul", "ol", "li",
+      "blockquote", "pre", "code",
+      "a", "img",
+    ],
+    ALLOWED_ATTR: ["href", "src", "alt", "target", "rel", "class"],
+  });
 }
 
 function invalidate() {

@@ -12,6 +12,7 @@ import {
   user,
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
+import { getAffectedRows } from "@/lib/db-utils";
 import { customerSummary } from "@/server/stats";
 import { formatYuan, yuanStringToCents } from "@/lib/format";
 import { nanoid } from "../id";
@@ -156,24 +157,27 @@ export async function deductCustomerBalanceAction(
   }
 
   const [existing] = await db
-    .select({ id: customer.id, balanceCents: customer.balanceCents })
+    .select({ id: customer.id })
     .from(customer)
     .where(eq(customer.id, customerId))
     .limit(1);
   if (!existing) return { ok: false as const, error: "客户不存在" };
-  if (existing.balanceCents < amountCents) {
-    return {
-      ok: false as const,
-      error: `余额不足(当前 ${formatYuan(existing.balanceCents)})`,
-    };
-  }
 
   const txnId = nanoid();
-  await db.transaction(async (tx) => {
-    await tx
-      .update(customer)
-      .set({ balanceCents: sql`${customer.balanceCents} - ${amountCents}` })
-      .where(eq(customer.id, customerId));
+  try {
+    await db.transaction(async (tx) => {
+      const result = await tx
+        .update(customer)
+        .set({ balanceCents: sql`${customer.balanceCents} - ${amountCents}` })
+        .where(
+          and(
+            eq(customer.id, customerId),
+            sql`${customer.balanceCents} >= ${amountCents}`
+          )
+        );
+      if (getAffectedRows(result) !== 1) {
+        throw new Error("INSUFFICIENT_BALANCE");
+      }
 
     await tx.insert(customerBalanceTxn).values({
       id: txnId,
@@ -191,7 +195,13 @@ export async function deductCustomerBalanceAction(
         playerId,
       }))
     );
-  });
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "INSUFFICIENT_BALANCE") {
+      return { ok: false as const, error: "余额不足,请刷新后重试" };
+    }
+    throw e;
+  }
 
   revalidatePath("/customers");
   revalidatePath("/orders/new");

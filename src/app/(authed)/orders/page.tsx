@@ -41,9 +41,7 @@ export default async function OrdersPage({
 
   const dispatcherUser = aliasedTable(user, "dispatcher");
 
-  // Build WHERE conditions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [];
+  const conditions: ReturnType<typeof eq>[] = [];
 
   // Player can only see their own orders
   if (me.role === "PLAYER") {

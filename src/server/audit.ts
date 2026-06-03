@@ -20,7 +20,8 @@ export async function logAudit(opts: {
       targetId: opts.targetId ?? null,
       detail: opts.detail ? JSON.stringify(opts.detail) : null,
     });
-  } catch {
-    // 日志失败不阻断业务
+  } catch (e) {
+    // 日志失败不阻断业务,但记录到控制台便于排查
+    console.error("[audit] logAudit failed:", e);
   }
 }

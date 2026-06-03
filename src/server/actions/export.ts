@@ -1,14 +1,14 @@
 "use server";
 
-function escapeLike(s: string) {
-  return s.replace(/[%_\\]/g, "\\$&");
-}
-
 import { and, desc, eq, gte, lte, like, or, aliasedTable } from "drizzle-orm";
 import { db } from "@/db";
 import { order, user, customer } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { centsToYuanString, formatDateTime, formatDuration } from "@/lib/format";
+
+function escapeLike(s: string) {
+  return s.replace(/[%_\\]/g, "\\$&");
+}
 
 function toCSV(headers: string[], rows: string[][]): string {
   const neutralizeFormula = (v: string) =>

@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition, useRef } from "react";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -16,7 +16,7 @@ export function SearchBar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const current = searchParams.get(paramName) ?? "";
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -35,7 +35,11 @@ export function SearchBar({
 
   return (
     <div className="relative flex items-center">
-      <Search className="absolute left-3 size-4 text-muted-foreground pointer-events-none" />
+      {pending ? (
+        <Loader2 className="absolute left-3 size-4 animate-spin text-muted-foreground pointer-events-none" />
+      ) : (
+        <Search className="absolute left-3 size-4 text-muted-foreground pointer-events-none" />
+      )}
       <Input
         ref={inputRef}
         defaultValue={current}
