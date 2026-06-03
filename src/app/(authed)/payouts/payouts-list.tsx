@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Clock, Wallet, XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,12 +30,6 @@ interface PayoutRow {
 
 type TabKey = "all" | "UNSETTLED" | "SETTLED";
 
-const tabFilters: Record<TabKey, (o: PayoutRow) => boolean> = {
-  all: () => true,
-  UNSETTLED: (o) => o.settleStatus === "UNSETTLED",
-  SETTLED: (o) => o.settleStatus === "SETTLED",
-};
-
 const methodLabel: Record<PayMethod, string> = {
   WECHAT: "微信",
   ALIPAY: "支付宝",
@@ -48,34 +42,35 @@ function payoutCents(o: PayoutRow): number {
     : o.playerEarnCents;
 }
 
-export function PayoutsList({ orders }: { orders: PayoutRow[] }) {
-  const [tab, setTab] = useState<TabKey>("UNSETTLED");
+export function PayoutsList({
+  orders,
+  tab,
+  unsettledCount,
+  totalCount,
+  totalEarnCents,
+}: {
+  orders: PayoutRow[];
+  tab: TabKey;
+  unsettledCount: number;
+  totalCount: number;
+  totalEarnCents: number;
+}) {
+  const router = useRouter();
 
-  const filtered = useMemo(() => orders.filter(tabFilters[tab]), [tab, orders]);
-
-  const counts = useMemo(
-    () => ({
-      unsettled: orders.filter(tabFilters.UNSETTLED).length,
-      settled: orders.filter(tabFilters.SETTLED).length,
-    }),
-    [orders]
-  );
-
-  const totalEarn = useMemo(
-    () => filtered.reduce((s, o) => s + payoutCents(o), 0),
-    [filtered]
-  );
+  function changeTab(v: TabKey) {
+    router.push(v === "UNSETTLED" ? "/payouts" : `/payouts?tab=${v}`);
+  }
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <Tabs value={tab} onValueChange={(v) => changeTab(v as TabKey)}>
           <TabsList>
             <TabsTrigger value="UNSETTLED">
               待打款
-              {counts.unsettled > 0 && (
+              {unsettledCount > 0 && (
                 <Badge variant="default" className="ml-1 h-4 px-1 text-[10px]">
-                  {counts.unsettled}
+                  {unsettledCount}
                 </Badge>
               )}
             </TabsTrigger>
@@ -85,14 +80,14 @@ export function PayoutsList({ orders }: { orders: PayoutRow[] }) {
         </Tabs>
 
         <div className="text-xs text-muted-foreground">
-          {filtered.length} 单 ·{" "}
+          {totalCount} 单 ·{" "}
           <span className="font-mono tabular-nums text-foreground">
-            {formatYuan(totalEarn)}
+            {formatYuan(totalEarnCents)}
           </span>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {orders.length === 0 ? (
         <EmptyState
           icon={<Wallet />}
           title={tab === "UNSETTLED" ? "没有待打款订单" : "暂无记录"}
@@ -100,7 +95,7 @@ export function PayoutsList({ orders }: { orders: PayoutRow[] }) {
       ) : (
         <Card className="overflow-hidden p-0">
           <ul className="divide-y">
-            {filtered.map((o) => {
+            {orders.map((o) => {
               const isCanceled = o.orderStatus === "CANCELED";
               const amount = payoutCents(o);
               return (

@@ -50,57 +50,102 @@ async function pendingSum(playerId?: string) {
 
 export async function playerSummary(playerId: string, range: RangeKey) {
   const { from, to } = rangeOf(range);
-
-  const [completed] = await db
+  // 把原来的 6 条查询(完成/取消补偿/进行中 + pendingSum 的 2 条)合并成单条 CASE WHEN 聚合。
+  // 业绩口径(orderCount/duration/payable/commission/playerEarn)只算范围内 COMPLETED;
+  // 取消补偿算范围内 CANCELED;进行中 / 待结算不带时间范围。
+  const inRange = sql`${order.startAt} >= ${from} AND ${order.startAt} <= ${to}`;
+  const [row] = await db
     .select({
-      orderCount: count(),
-      durationMin: sum(order.durationMin).mapWith(Number),
-      payableCents: sum(order.payableCents).mapWith(Number),
-      commissionCents: sum(order.commissionCents).mapWith(Number),
-      playerEarnCents: sum(order.playerEarnCents).mapWith(Number),
+      orderCount: sql<number>`count(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then 1 end)`.mapWith(Number),
+      durationMin: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.durationMin} else 0 end), 0)`.mapWith(Number),
+      payableCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.payableCents} else 0 end), 0)`.mapWith(Number),
+      commissionCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.commissionCents} else 0 end), 0)`.mapWith(Number),
+      completedEarnCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.playerEarnCents} else 0 end), 0)`.mapWith(Number),
+      canceledCompensationCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'CANCELED' and ${inRange} then ${order.playerCompensationCents} else 0 end), 0)`.mapWith(Number),
+      inProgressCount: sql<number>`count(case when ${order.orderStatus} = 'IN_PROGRESS' then 1 end)`.mapWith(Number),
+      pendingCount: sql<number>`count(case when ${order.settleStatus} = 'UNSETTLED' and (${order.orderStatus} = 'COMPLETED' or ${order.orderStatus} = 'CANCELED') then 1 end)`.mapWith(Number),
+      pendingEarnCents: sql<number>`coalesce(sum(case when ${order.settleStatus} = 'UNSETTLED' and ${order.orderStatus} = 'COMPLETED' then ${order.playerEarnCents} when ${order.settleStatus} = 'UNSETTLED' and ${order.orderStatus} = 'CANCELED' then ${order.playerCompensationCents} else 0 end), 0)`.mapWith(Number),
+    })
+    .from(order)
+    .where(eq(order.playerId, playerId));
+
+  return {
+    range,
+    orderCount: row?.orderCount ?? 0,
+    durationMin: row?.durationMin ?? 0,
+    payableCents: row?.payableCents ?? 0,
+    commissionCents: row?.commissionCents ?? 0,
+    playerEarnCents:
+      (row?.completedEarnCents ?? 0) + (row?.canceledCompensationCents ?? 0),
+    inProgressCount: row?.inProgressCount ?? 0,
+    pendingCount: row?.pendingCount ?? 0,
+    pendingEarnCents: row?.pendingEarnCents ?? 0,
+  };
+}
+
+/** 陪玩排名:数"业绩比我强的人数 + 1",避免拉全表排序。range 内严格按 COMPLETED 总时长,平时长再比流水。 */
+export async function playerRank(
+  playerId: string,
+  range: RangeKey,
+  myDurationMin: number,
+  myPayableCents: number
+): Promise<number | null> {
+  if (myDurationMin <= 0) return null; // 范围内没完成单,不上榜
+  const { from, to } = rangeOf(range);
+  const perPlayer = db
+    .select({
+      pid: order.playerId,
+      dur: sum(order.durationMin).mapWith(Number).as("dur"),
+      pay: sum(order.payableCents).mapWith(Number).as("pay"),
     })
     .from(order)
     .where(
       and(
-        eq(order.playerId, playerId),
         eq(order.orderStatus, "COMPLETED"),
         gte(order.startAt, from),
         lte(order.startAt, to)
       )
-    );
+    )
+    .groupBy(order.playerId)
+    .as("per_player");
 
-  const [canceledCompensation] = await db
-    .select({ s: sum(order.playerCompensationCents).mapWith(Number) })
-    .from(order)
+  // 排在我前面 = 时长更长,或时长相同但流水更高
+  const [{ ahead }] = await db
+    .select({ ahead: count() })
+    .from(perPlayer)
     .where(
       and(
-        eq(order.playerId, playerId),
-        eq(order.orderStatus, "CANCELED"),
-        gte(order.startAt, from),
-        lte(order.startAt, to)
+        sql`${perPlayer.pid} <> ${playerId}`,
+        or(
+          sql`${perPlayer.dur} > ${myDurationMin}`,
+          and(
+            sql`${perPlayer.dur} = ${myDurationMin}`,
+            sql`${perPlayer.pay} > ${myPayableCents}`
+          )
+        )
       )
     );
+  return (ahead ?? 0) + 1;
+}
 
-  const [inProgress] = await db
-    .select({ count: count() })
+/** 打款明细页汇总(全量,不受分页影响) */
+export async function payoutSummary(playerId: string) {
+  const payout = sql`case when ${order.orderStatus} = 'CANCELED' then ${order.playerCompensationCents} else ${order.playerEarnCents} end`;
+  const isPayout = sql`(${order.orderStatus} = 'COMPLETED' or (${order.orderStatus} = 'CANCELED' and ${order.playerCompensationCents} > 0))`;
+  const [row] = await db
+    .select({
+      unsettledCount: sql<number>`count(case when ${isPayout} and ${order.settleStatus} = 'UNSETTLED' then 1 end)`.mapWith(Number),
+      settledCount: sql<number>`count(case when ${isPayout} and ${order.settleStatus} = 'SETTLED' then 1 end)`.mapWith(Number),
+      unsettledEarnCents: sql<number>`coalesce(sum(case when ${isPayout} and ${order.settleStatus} = 'UNSETTLED' then ${payout} else 0 end), 0)`.mapWith(Number),
+      settledEarnCents: sql<number>`coalesce(sum(case when ${isPayout} and ${order.settleStatus} = 'SETTLED' then ${payout} else 0 end), 0)`.mapWith(Number),
+    })
     .from(order)
-    .where(
-      and(eq(order.playerId, playerId), eq(order.orderStatus, "IN_PROGRESS"))
-    );
-
-  const pending = await pendingSum(playerId);
-
+    .where(eq(order.playerId, playerId));
   return {
-    range,
-    orderCount: completed?.orderCount ?? 0,
-    durationMin: completed?.durationMin ?? 0,
-    payableCents: completed?.payableCents ?? 0,
-    commissionCents: completed?.commissionCents ?? 0,
-    playerEarnCents:
-      (completed?.playerEarnCents ?? 0) + (canceledCompensation?.s ?? 0),
-    inProgressCount: inProgress?.count ?? 0,
-    pendingCount: pending.count,
-    pendingEarnCents: pending.cents,
+    unsettledCount: row?.unsettledCount ?? 0,
+    settledCount: row?.settledCount ?? 0,
+    unsettledEarnCents: row?.unsettledEarnCents ?? 0,
+    settledEarnCents: row?.settledEarnCents ?? 0,
   };
 }
 
@@ -176,10 +221,10 @@ export interface LeaderboardRow {
   playerEarnCents: number;
 }
 
-export async function leaderboard(range: RangeKey): Promise<LeaderboardRow[]> {
+export async function leaderboard(range: RangeKey, limit?: number): Promise<LeaderboardRow[]> {
   const { from, to } = rangeOf(range);
   // 排行榜口径:严格按 COMPLETED 单算业绩,取消单不计排名
-  const rows = await db
+  const base = db
     .select({
       playerId: order.playerId,
       orderCount: count(),
@@ -208,6 +253,8 @@ export async function leaderboard(range: RangeKey): Promise<LeaderboardRow[]> {
       desc(sum(order.payableCents)),
       sql`max(${order.completedAt}) asc`
     );
+
+  const rows = limit ? await base.limit(limit) : await base;
 
   return rows.map((r) => ({
     playerId: r.playerId,

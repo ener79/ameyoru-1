@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { OrderStatusGroup } from "@/components/order-status-badge";
 import { RankBadge } from "@/components/rank-badge";
 import { cn } from "@/lib/utils";
-import { leaderboard, playerSummary, recentOrders } from "@/server/stats";
+import { leaderboard, playerRank, playerSummary, recentOrders } from "@/server/stats";
 import {
   avatarInitial,
   formatDuration,
@@ -25,31 +25,32 @@ export async function PlayerOverview({
   userId: string;
   userName: string;
 }) {
-  const [today, week, month, weekRank, monthRank, recent] = await Promise.all([
+  const [today, week, month, weekTop, recent] = await Promise.all([
     playerSummary(userId, "today"),
     playerSummary(userId, "week"),
     playerSummary(userId, "month"),
-    leaderboard("week"),
-    leaderboard("month"),
+    leaderboard("week", 5),
     recentOrders({ playerId: userId, limit: 5 }),
   ]);
 
-  const weekRankIdx = weekRank.findIndex((r) => r.playerId === userId);
-  const monthRankIdx = monthRank.findIndex((r) => r.playerId === userId);
-  const myWeekDuration = weekRankIdx >= 0 ? weekRank[weekRankIdx].durationMin : 0;
-  const myMonthDuration = monthRankIdx >= 0 ? monthRank[monthRankIdx].durationMin : 0;
+  // 排名改成"数有多少人比我强"的轻查询,不再拉全表
+  const [weekRankNum, monthRankNum] = await Promise.all([
+    playerRank(userId, "week", week.durationMin, week.payableCents),
+    playerRank(userId, "month", month.durationMin, month.payableCents),
+  ]);
+
   const formatRank = (
-    idx: number,
+    rank: number | null,
     range: "week" | "month",
     durationMin: number,
     orderCount: number
   ) => {
     const label = range === "week" ? "本周" : "本月";
-    if (idx >= 0) return `${label}第 ${idx + 1} · ${formatDuration(durationMin)}`;
+    if (rank != null) return `${label}第 ${rank} · ${formatDuration(durationMin)}`;
     if (orderCount === 0) return `${label}还没单`;
     return `${label}未上榜`;
   };
-  const rankDescription = `${formatRank(weekRankIdx, "week", myWeekDuration, week.orderCount)}  ·  ${formatRank(monthRankIdx, "month", myMonthDuration, month.orderCount)}`;
+  const rankDescription = `${formatRank(weekRankNum, "week", week.durationMin, week.orderCount)}  ·  ${formatRank(monthRankNum, "month", month.durationMin, month.orderCount)}`;
 
   return (
     <>
@@ -115,7 +116,7 @@ export async function PlayerOverview({
             </Button>
           }
         >
-          {weekRank.length === 0 ? (
+          {weekTop.length === 0 ? (
             <EmptyState
               icon={<Trophy />}
               title="本周还没有排行"
@@ -123,7 +124,7 @@ export async function PlayerOverview({
             />
           ) : (
             <ol className="space-y-1.5 rounded-xl border bg-card p-2">
-              {weekRank.slice(0, 5).map((r, i) => {
+              {weekTop.map((r, i) => {
                 const isMe = r.playerId === userId;
                 return (
                   <li
@@ -160,9 +161,9 @@ export async function PlayerOverview({
               })}
 
               {/* 自己不在 TOP 5 时,在末尾追加一行高亮显示自己的位置 */}
-              {weekRankIdx >= 5 && (
+              {weekRankNum != null && weekRankNum > 5 && (
                 <li className="mt-1 flex items-center gap-3 rounded-lg border-t border-dashed bg-primary/5 px-3 py-2.5">
-                  <RankBadge index={weekRankIdx} />
+                  <RankBadge index={weekRankNum - 1} />
                   <Avatar className="size-8">
                     <AvatarFallback className="bg-primary/10 text-primary text-xs">
                       {avatarInitial(userName)}
@@ -179,7 +180,7 @@ export async function PlayerOverview({
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {formatDuration(weekRank[weekRankIdx]?.durationMin ?? 0)} · {weekRank[weekRankIdx]?.orderCount ?? week.orderCount} 单
+                      {formatDuration(week.durationMin)} · {week.orderCount} 单
                     </div>
                   </div>
                 </li>

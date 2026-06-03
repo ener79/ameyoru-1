@@ -2,7 +2,7 @@ import { and, count, desc, eq, gt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { order, customer } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
-import { playerSummary } from "@/server/stats";
+import { payoutSummary, playerSummary } from "@/server/stats";
 import { PageHeader } from "@/components/page-header";
 import { Pagination } from "@/components/pagination";
 import { KpiCard } from "@/components/kpi-card";
@@ -14,31 +14,38 @@ const PAGE_SIZE = 30;
 export default async function PayoutsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   const { user: me } = await requireSession({ role: "PLAYER" });
   const params = await searchParams;
+  const tab =
+    params.tab === "SETTLED" || params.tab === "all" ? params.tab : "UNSETTLED";
   const page = Math.max(1, parseInt(params.page ?? "1") || 1);
   const offset = (page - 1) * PAGE_SIZE;
 
-  const payoutWhere = and(
-    eq(order.playerId, me.id),
-    or(
-      eq(order.orderStatus, "COMPLETED"),
-      and(
-        eq(order.orderStatus, "CANCELED"),
-        gt(order.playerCompensationCents, 0)
-      )
+  const isPayout = or(
+    eq(order.orderStatus, "COMPLETED"),
+    and(
+      eq(order.orderStatus, "CANCELED"),
+      gt(order.playerCompensationCents, 0)
     )
   );
+  const tabCond =
+    tab === "UNSETTLED"
+      ? eq(order.settleStatus, "UNSETTLED")
+      : tab === "SETTLED"
+        ? eq(order.settleStatus, "SETTLED")
+        : undefined;
+  const listWhere = and(eq(order.playerId, me.id), isPayout, tabCond);
 
-  const [month, countResult, rows] = await Promise.all([
+  const [month, summary, countResult, rows] = await Promise.all([
     playerSummary(me.id, "month"),
+    payoutSummary(me.id),
     db
       .select({ count: count() })
       .from(order)
       .innerJoin(customer, eq(customer.id, order.customerId))
-      .where(payoutWhere),
+      .where(listWhere),
     db
       .select({
         id: order.id,
@@ -54,7 +61,7 @@ export default async function PayoutsPage({
       })
       .from(order)
       .innerJoin(customer, eq(customer.id, order.customerId))
-      .where(payoutWhere)
+      .where(listWhere)
       .orderBy(desc(order.startAt))
       .limit(PAGE_SIZE)
       .offset(offset),
@@ -89,6 +96,22 @@ export default async function PayoutsPage({
 
       <div className="mt-6">
         <PayoutsList
+          tab={tab}
+          unsettledCount={summary.unsettledCount}
+          totalCount={
+            tab === "UNSETTLED"
+              ? summary.unsettledCount
+              : tab === "SETTLED"
+                ? summary.settledCount
+                : summary.unsettledCount + summary.settledCount
+          }
+          totalEarnCents={
+            tab === "UNSETTLED"
+              ? summary.unsettledEarnCents
+              : tab === "SETTLED"
+                ? summary.settledEarnCents
+                : summary.unsettledEarnCents + summary.settledEarnCents
+          }
           orders={rows.map((r) => ({
             ...r,
             startAt: r.startAt.toISOString(),
@@ -99,7 +122,7 @@ export default async function PayoutsPage({
           page={page}
           pageSize={PAGE_SIZE}
           total={total}
-          baseHref="/payouts"
+          baseHref={tab === "UNSETTLED" ? "/payouts" : `/payouts?tab=${tab}`}
         />
       </div>
     </>
