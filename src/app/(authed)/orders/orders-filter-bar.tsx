@@ -33,7 +33,6 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersF
     if (merged.tab && merged.tab !== "PENDING_SETTLE") sp.set("tab", merged.tab);
     if (merged.dateFrom) sp.set("dateFrom", merged.dateFrom);
     if (merged.dateTo) sp.set("dateTo", merged.dateTo);
-    // Always reset to page 1 when filter changes
     return `/orders?${sp.toString()}`;
   }
 

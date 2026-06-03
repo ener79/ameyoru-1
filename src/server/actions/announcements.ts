@@ -8,6 +8,7 @@ import { announcement } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { nanoid } from "../id";
 import { logAudit } from "@/server/audit";
+import DOMPurify from "isomorphic-dompurify";
 
 const upsertSchema = z.object({
   id: z.string().optional(),
@@ -23,8 +24,6 @@ const upsertSchema = z.object({
 });
 
 export type UpsertAnnouncementInput = z.input<typeof upsertSchema>;
-
-import DOMPurify from "isomorphic-dompurify";
 
 function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {

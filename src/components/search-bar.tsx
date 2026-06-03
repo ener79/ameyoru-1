@@ -27,7 +27,7 @@ export function SearchBar({
     } else {
       params.delete(paramName);
     }
-    params.delete("page"); // reset page on new search
+    params.delete("page");
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });

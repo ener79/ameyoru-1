@@ -179,22 +179,22 @@ export async function deductCustomerBalanceAction(
         throw new Error("INSUFFICIENT_BALANCE");
       }
 
-    await tx.insert(customerBalanceTxn).values({
-      id: txnId,
-      customerId,
-      type: "MANUAL_DEDUCT",
-      amountCents: -amountCents,
-      note,
-      createdById: me.id,
-    });
+      await tx.insert(customerBalanceTxn).values({
+        id: txnId,
+        customerId,
+        type: "MANUAL_DEDUCT",
+        amountCents: -amountCents,
+        note,
+        createdById: me.id,
+      });
 
-    await tx.insert(customerBalanceTxnPlayer).values(
-      uniquePlayerIds.map((playerId) => ({
-        id: nanoid(),
-        txnId,
-        playerId,
-      }))
-    );
+      await tx.insert(customerBalanceTxnPlayer).values(
+        uniquePlayerIds.map((playerId) => ({
+          id: nanoid(),
+          txnId,
+          playerId,
+        }))
+      );
     });
   } catch (e) {
     if (e instanceof Error && e.message === "INSUFFICIENT_BALANCE") {
