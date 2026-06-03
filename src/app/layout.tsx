@@ -32,7 +32,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const settings = await getSiteSettings();
-  const css = settings.customThemeCSS || getPresetCSS(settings.themePreset);
+  let css = settings.customThemeCSS || getPresetCSS(settings.themePreset);
+  if (settings.borderRadius) {
+    css += `:root{--radius:${settings.borderRadius}}`;
+  }
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>

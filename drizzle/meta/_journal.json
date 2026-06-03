@@ -43,6 +43,13 @@
       "when": 1780586400000,
       "tag": "0005_theme_presets",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1780672800000,
+      "tag": "0006_border_radius",
+      "breakpoints": true
     }
   ]
 }

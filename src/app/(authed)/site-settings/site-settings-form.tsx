@@ -21,6 +21,7 @@ interface Props {
     footerText: string | null;
     themePreset: string;
     customThemeCSS: string | null;
+    borderRadius: string | null;
   };
 }
 
@@ -33,6 +34,7 @@ export function SiteSettingsForm({ settings }: Props) {
   const [themePreset, setThemePreset] = useState(settings.themePreset);
   const [customCSS, setCustomCSS] = useState(settings.customThemeCSS ?? "");
   const [showCustom, setShowCustom] = useState(!!settings.customThemeCSS);
+  const [borderRadius, setBorderRadius] = useState(settings.borderRadius ?? "");
   const [logoPreview, setLogoPreview] = useState<string | null>(
     settings.logoPath ? `/api/uploads/${settings.logoPath}` : null
   );
@@ -54,6 +56,7 @@ export function SiteSettingsForm({ settings }: Props) {
     fd.set("footerText", footerText);
     fd.set("themePreset", themePreset);
     fd.set("customThemeCSS", showCustom ? customCSS : "");
+    fd.set("borderRadius", borderRadius);
     if (logoFile) fd.set("logo", logoFile);
 
     startTransition(async () => {
@@ -135,6 +138,29 @@ export function SiteSettingsForm({ settings }: Props) {
               </div>
             </button>
           ))}
+        </div>
+
+        <div className="border-t pt-4 space-y-2">
+          <Label>圆角大小</Label>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.0625"
+              value={borderRadius ? parseFloat(borderRadius) : 0.75}
+              onChange={(e) => setBorderRadius(`${e.target.value}rem`)}
+              className="flex-1 accent-primary"
+            />
+            <span className="text-sm font-mono w-16 text-right tabular-nums">
+              {borderRadius || "0.75rem"}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <div className="border size-8" style={{ borderRadius: borderRadius || "0.75rem" }} />
+            <div className="border size-8 bg-primary/10" style={{ borderRadius: borderRadius || "0.75rem" }} />
+            <span className="text-xs text-muted-foreground self-center">预览</span>
+          </div>
         </div>
 
         <div className="border-t pt-4">

@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   footerText: null as string | null,
   themePreset: "default",
   customThemeCSS: null as string | null,
+  borderRadius: null as string | null,
 };
 
 export async function getSiteSettings() {
@@ -36,6 +37,7 @@ export async function getSiteSettings() {
       footerText: siteSettings.footerText,
       themePreset: siteSettings.themePreset,
       customThemeCSS: siteSettings.customThemeCSS,
+      borderRadius: siteSettings.borderRadius,
     })
     .from(siteSettings)
     .limit(1);
@@ -48,6 +50,7 @@ const updateSchema = z.object({
   footerText: z.string().max(500).optional().nullable().transform((s) => s?.trim() || null),
   themePreset: z.enum(PRESET_KEYS),
   customThemeCSS: z.string().max(10240).optional().nullable().transform((s) => s?.trim() || null),
+  borderRadius: z.string().max(10).optional().nullable().transform((s) => s?.trim() || null),
 });
 
 export async function updateSiteSettingsAction(formData: FormData) {
@@ -59,6 +62,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     footerText: formData.get("footerText") || null,
     themePreset: String(formData.get("themePreset") ?? "default"),
     customThemeCSS: formData.get("customThemeCSS") || null,
+    borderRadius: formData.get("borderRadius") || null,
   };
   const parsed = updateSchema.safeParse(raw);
   if (!parsed.success) {
@@ -96,6 +100,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     footerText: parsed.data.footerText,
     themePreset: parsed.data.themePreset,
     customThemeCSS: parsed.data.customThemeCSS,
+    borderRadius: parsed.data.borderRadius,
     updatedAt: new Date(),
     ...(logoPath !== undefined ? { logoPath } : {}),
   };

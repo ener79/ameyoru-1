@@ -335,6 +335,7 @@ export const siteSettings = mysqlTable("site_settings", {
   footerText: varchar("footer_text", { length: 500 }),
   themePreset: varchar("theme_preset", { length: 30 }).notNull().default("default"),
   customThemeCSS: text("custom_theme_css"),
+  borderRadius: varchar("border_radius", { length: 10 }),
   updatedAt: ts("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP(3)`),
