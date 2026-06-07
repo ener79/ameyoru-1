@@ -44,7 +44,7 @@ export function SearchBar({
         ref={inputRef}
         defaultValue={current}
         placeholder={placeholder}
-        className="pl-9 pr-8 h-9 w-48 sm:w-64"
+        className="pl-9 pr-8 h-9 w-full max-w-64"
         onKeyDown={(e) => {
           if (e.key === "Enter") navigate(e.currentTarget.value.trim());
         }}

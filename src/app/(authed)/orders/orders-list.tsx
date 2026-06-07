@@ -244,7 +244,7 @@ export function OrdersList({
                           <Tag className="size-3 text-warning" />
                         )}
                       </div>
-                      <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
+                      <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
                         <div>
                           <span className="text-muted-foreground">时间 </span>
                           <span>{formatRelativeDateTime(o.startAt)}</span>

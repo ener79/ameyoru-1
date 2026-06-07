@@ -66,22 +66,22 @@ export async function PlayerOverview({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="今日完成"
           value={today.orderCount}
-          hint={`${formatYuan(today.playerEarnCents)} 应得`}
+          hint={`${formatDuration(today.durationMin)} · ${formatYuan(today.playerEarnCents)} 应得`}
         />
         <KpiCard
           label="本周应得"
           value={formatYuan(week.playerEarnCents)}
-          hint={`${week.orderCount} 单`}
+          hint={`${week.orderCount} 单 · ${formatDuration(week.durationMin)}`}
           emphasis
         />
         <KpiCard
           label="本月应得"
           value={formatYuan(month.playerEarnCents)}
-          hint={`${month.orderCount} 单`}
+          hint={`${month.orderCount} 单 · ${formatDuration(month.durationMin)}`}
         />
         <KpiCard
           label="未结订单"

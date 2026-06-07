@@ -28,7 +28,7 @@ export function Pagination({
   }
 
   return (
-    <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-2 mt-4 text-sm text-muted-foreground">
       <span>
         第 {page}/{totalPages} 页 · 共 {total} 条
       </span>

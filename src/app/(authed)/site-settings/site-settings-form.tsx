@@ -22,6 +22,7 @@ interface Props {
     themePreset: string;
     customThemeCSS: string | null;
     borderRadius: string | null;
+    unsettledWarnDays: number;
   };
 }
 
@@ -35,6 +36,7 @@ export function SiteSettingsForm({ settings }: Props) {
   const [customCSS, setCustomCSS] = useState(settings.customThemeCSS ?? "");
   const [showCustom, setShowCustom] = useState(!!settings.customThemeCSS);
   const [borderRadius, setBorderRadius] = useState(settings.borderRadius ?? "");
+  const [unsettledWarnDays, setUnsettledWarnDays] = useState(settings.unsettledWarnDays);
   const [logoPreview, setLogoPreview] = useState<string | null>(
     settings.logoPath ? `/api/uploads/${settings.logoPath}` : null
   );
@@ -57,6 +59,7 @@ export function SiteSettingsForm({ settings }: Props) {
     fd.set("themePreset", themePreset);
     fd.set("customThemeCSS", showCustom ? customCSS : "");
     fd.set("borderRadius", borderRadius);
+    fd.set("unsettledWarnDays", String(unsettledWarnDays));
     if (logoFile) fd.set("logo", logoFile);
 
     startTransition(async () => {
@@ -99,6 +102,20 @@ export function SiteSettingsForm({ settings }: Props) {
         <div className="space-y-2">
           <Label htmlFor="siteName">站点名称</Label>
           <Input id="siteName" value={siteName} onChange={(e) => setSiteName(e.target.value)} maxLength={100} required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="unsettledWarnDays">未结算预警天数</Label>
+          <Input
+            id="unsettledWarnDays"
+            type="number"
+            min={1}
+            max={90}
+            value={unsettledWarnDays}
+            onChange={(e) => setUnsettledWarnDays(parseInt(e.target.value) || 5)}
+          />
+          <p className="text-xs text-muted-foreground">
+            订单超过该天数未结算时，总览页会显示预警提示
+          </p>
         </div>
       </Card>
 

@@ -165,7 +165,7 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="待支付"
           value={String(stats.pending)}

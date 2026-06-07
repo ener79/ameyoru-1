@@ -25,6 +25,7 @@ const updateSchema = z.object({
   themePreset: z.enum(PRESET_KEYS),
   customThemeCSS: z.string().max(10240).optional().nullable().transform((s) => s?.trim() || null),
   borderRadius: z.string().max(10).optional().nullable().transform((s) => s?.trim() || null),
+  unsettledWarnDays: z.coerce.number().int().min(1).max(90).default(5),
 });
 
 export async function updateSiteSettingsAction(formData: FormData) {
@@ -37,6 +38,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     themePreset: String(formData.get("themePreset") ?? "default"),
     customThemeCSS: formData.get("customThemeCSS") || null,
     borderRadius: formData.get("borderRadius") || null,
+    unsettledWarnDays: formData.get("unsettledWarnDays") || 5,
   };
   const parsed = updateSchema.safeParse(raw);
   if (!parsed.success) {
@@ -75,6 +77,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     themePreset: parsed.data.themePreset,
     customThemeCSS: parsed.data.customThemeCSS,
     borderRadius: parsed.data.borderRadius,
+    unsettledWarnDays: parsed.data.unsettledWarnDays,
     updatedAt: new Date(),
     ...(logoPath !== undefined ? { logoPath } : {}),
   };

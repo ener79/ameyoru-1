@@ -429,3 +429,22 @@ export async function weekOverWeekRevenue(): Promise<{ thisWeek: number; lastWee
 
   return { thisWeek: thisW?.s ?? 0, lastWeek: lastW?.s ?? 0 };
 }
+
+export async function overdueUnsettledCount(thresholdDays: number) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - thresholdDays);
+  const [row] = await db
+    .select({ count: count() })
+    .from(order)
+    .where(
+      and(
+        eq(order.settleStatus, "UNSETTLED"),
+        or(
+          eq(order.orderStatus, "COMPLETED"),
+          eq(order.orderStatus, "CANCELED")
+        ),
+        lte(order.endAt, cutoff)
+      )
+    );
+  return row?.count ?? 0;
+}

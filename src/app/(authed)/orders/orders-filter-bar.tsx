@@ -69,7 +69,7 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersF
 
       {/* Search + date range */}
       <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <div className="relative min-w-0 w-full sm:w-64">
           {pending ? (
             <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 animate-spin text-muted-foreground" />
           ) : (

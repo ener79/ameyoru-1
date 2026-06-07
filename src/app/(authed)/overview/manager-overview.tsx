@@ -8,16 +8,18 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusGroup } from "@/components/order-status-badge";
 import { RankBadge } from "@/components/rank-badge";
-import { leaderboard, recentOrders, shopSummary, dailyRevenue, weekOverWeekRevenue } from "@/server/stats";
+import { leaderboard, recentOrders, shopSummary, dailyRevenue, weekOverWeekRevenue, overdueUnsettledCount } from "@/server/stats";
+import { getSiteSettings } from "@/lib/site-settings";
 import {
   avatarInitial,
+  formatDuration,
   formatRelativeDateTime,
   formatYuan,
 } from "@/lib/format";
 
 /** 给 BOSS / STAFF 共用的店铺总览 */
 export async function ManagerOverview({ userName }: { userName: string }) {
-  const [today, week, month, weekRank, recent, daily, wow] = await Promise.all([
+  const [today, week, month, weekRank, recent, daily, wow, siteSettingsData] = await Promise.all([
     shopSummary("today"),
     shopSummary("week"),
     shopSummary("month"),
@@ -25,7 +27,10 @@ export async function ManagerOverview({ userName }: { userName: string }) {
     recentOrders({ limit: 6 }),
     dailyRevenue(7),
     weekOverWeekRevenue(),
+    getSiteSettings(),
   ]);
+  const warnDays = siteSettingsData.unsettledWarnDays;
+  const overdueCount = await overdueUnsettledCount(warnDays);
 
   const wowPct = wow.lastWeek > 0
     ? `${wow.thisWeek >= wow.lastWeek ? "↑" : "↓"} ${Math.abs(Math.round((wow.thisWeek - wow.lastWeek) / wow.lastWeek * 100))}%`
@@ -35,45 +40,60 @@ export async function ManagerOverview({ userName }: { userName: string }) {
     <>
       <PageHeader title={`你好,${userName}`} description="店铺总览" />
 
-      {/* KPI 卡片 */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* 今日状态 */}
+      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">今日</div>
+      <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <KpiCard
+          label="进行中"
+          value={`${today.inProgressCount} 单`}
+          hint={today.inProgressCount > 0 ? undefined : "暂无进行中"}
+          emphasis={today.inProgressCount > 0}
+        />
         <KpiCard
           label="今日完成"
           value={`${today.orderCount} 单`}
-          hint={`累计 ${Math.floor((today.durationMin ?? 0) / 60)}h${(today.durationMin ?? 0) % 60 > 0 ? `${(today.durationMin ?? 0) % 60}m` : ""} · ${formatYuan(today.payableCents)}`}
+          hint={`${formatDuration(today.durationMin)} · ${formatYuan(today.payableCents)}`}
         />
-        <KpiCard
-          label="本周流水"
-          value={formatYuan(week.payableCents)}
-          hint={`${week.orderCount} 单`}
-          emphasis
-        />
-        <KpiCard label="本周抽成" value={formatYuan(week.commissionCents)} />
         <KpiCard
           label="未结订单"
           value={today.pendingCount}
-          hint={`待付 ${formatYuan(today.pendingEarnCents)}`}
+          hint={
+            <>
+              待付 {formatYuan(today.pendingEarnCents)}
+              {overdueCount > 0 && (
+                <span className="text-destructive font-medium">
+                  {" · "}⚠ {overdueCount} 单超 {warnDays} 天
+                </span>
+              )}
+            </>
+          }
         />
       </div>
 
-      {today.inProgressCount > 0 && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.03] px-4 py-2.5 text-sm">
-          <span className="text-muted-foreground">还有</span>
-          <span className="font-mono font-semibold text-primary tabular-nums">
-            {today.inProgressCount}
-          </span>
-          <span className="text-muted-foreground">单进行中</span>
-          <Button asChild variant="ghost" size="sm" className="ml-auto">
-            <Link href="/orders">
-              查看 <ChevronRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
-      )}
+      {/* 本周经营 */}
+      <div className="mt-6 text-xs font-medium tracking-wide text-muted-foreground uppercase">本周</div>
+      <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <KpiCard
+          label="本周流水"
+          value={formatYuan(week.payableCents)}
+          hint={`${week.orderCount} 单 · ${formatDuration(week.durationMin)}`}
+          emphasis
+        />
+        <KpiCard
+          label="陪玩支出"
+          value={formatYuan(week.playerEarnCents)}
+          hint={`${week.orderCount} 单`}
+        />
+        <KpiCard
+          label="本周利润"
+          value={formatYuan(week.shopProfitCents)}
+          hint={wowPct || "首周数据"}
+        />
+      </div>
 
       {/* 近7日收入 — 全宽，柱形图+数字+平均线+汇总 */}
       <div className="mt-6">
-        <Section title="近7日收入" description={wowPct ? `较上周 ${wowPct}` : "首周数据"}>
+        <Section title="近7日收入">
           {(() => {
             const max = Math.max(...daily.map(d => d.cents), 1);
             const totalCents = daily.reduce((s, d) => s + d.cents, 0);
@@ -84,16 +104,16 @@ export async function ManagerOverview({ userName }: { userName: string }) {
 
             return (
               <>
-                <div className="relative flex items-end gap-2 h-36 mt-3">
+                <div className="relative flex items-end gap-1 sm:gap-2 h-36 mt-3 overflow-x-auto min-w-0">
 
                   {daily.map((d, i) => {
-                    
+
                     const dayOffset = daily.length - 1 - i;
                     const dayDate = new Date(now);
                     dayDate.setDate(dayDate.getDate() - dayOffset);
                     const weekday = weekdays[dayDate.getDay()];
                     return (
-                      <div key={d.date} className="flex flex-col items-center gap-1 flex-1">
+                      <div key={d.date} className="flex flex-col items-center gap-1 flex-1 min-w-[36px]">
                         <span className="text-[10px] font-mono tabular-nums text-foreground">
                           {d.cents > 0 ? formatYuan(d.cents) : "-"}
                         </span>
@@ -109,7 +129,7 @@ export async function ManagerOverview({ userName }: { userName: string }) {
                     );
                   })}
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground border-t pt-2">
                   <span>本周合计 <span className="font-mono font-semibold text-foreground">{formatYuan(totalCents)}</span></span>
                   <span>日均 <span className="font-mono font-semibold text-foreground">{formatYuan(avgCents)}</span></span>
                   <span>最高 <span className="font-mono font-semibold text-foreground">{formatYuan(Math.max(...daily.map(d => d.cents)))}</span></span>
@@ -224,10 +244,10 @@ export async function ManagerOverview({ userName }: { userName: string }) {
       </div>
 
       {/* 本月汇总 */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <KpiCard label="本月订单" value={month.orderCount} />
-        <KpiCard label="本月流水" value={formatYuan(month.payableCents)} />
-        <KpiCard label="本月抽成" value={formatYuan(month.commissionCents)} />
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <KpiCard label="本月订单" value={month.orderCount} hint={formatDuration(month.durationMin)} />
+        <KpiCard label="本月流水" value={formatYuan(month.payableCents)} hint={`${month.orderCount} 单`} />
+        <KpiCard label="本月利润" value={formatYuan(month.shopProfitCents)} hint={`陪玩 ${formatYuan(month.playerEarnCents)}`} />
       </div>
     </>
   );

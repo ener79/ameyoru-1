@@ -10,6 +10,7 @@ export const DEFAULT_SITE_SETTINGS = {
   themePreset: "default",
   customThemeCSS: null as string | null,
   borderRadius: null as string | null,
+  unsettledWarnDays: 5,
 };
 
 /**
@@ -26,6 +27,7 @@ export const getSiteSettings = cache(async () => {
       themePreset: siteSettings.themePreset,
       customThemeCSS: siteSettings.customThemeCSS,
       borderRadius: siteSettings.borderRadius,
+      unsettledWarnDays: siteSettings.unsettledWarnDays,
     })
     .from(siteSettings)
     .limit(1);

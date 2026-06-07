@@ -336,6 +336,7 @@ export const siteSettings = mysqlTable("site_settings", {
   themePreset: varchar("theme_preset", { length: 30 }).notNull().default("default"),
   customThemeCSS: text("custom_theme_css"),
   borderRadius: varchar("border_radius", { length: 10 }),
+  unsettledWarnDays: int("unsettled_warn_days").notNull().default(5),
   updatedAt: ts("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP(3)`),
