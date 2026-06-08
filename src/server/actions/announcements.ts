@@ -78,16 +78,18 @@ export async function upsertAnnouncementAction(input: UpsertAnnouncementInput) {
 
 export async function toggleAnnouncementAction(input: { id: string; enabled: boolean }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const [target] = await db.select({ title: announcement.title }).from(announcement).where(eq(announcement.id, input.id)).limit(1);
   await db.update(announcement).set({ enabled: input.enabled }).where(eq(announcement.id, input.id));
-  logAudit({ actorId: me.id, actorName: me.name, action: input.enabled ? "ENABLE_ANNOUNCEMENT" : "DISABLE_ANNOUNCEMENT", targetType: "announcement", targetId: input.id });
+  logAudit({ actorId: me.id, actorName: me.name, action: input.enabled ? "ENABLE_ANNOUNCEMENT" : "DISABLE_ANNOUNCEMENT", targetType: "announcement", targetId: input.id, detail: target ? { title: target.title } : undefined });
   invalidate();
   return { ok: true as const };
 }
 
 export async function deleteAnnouncementAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const [target] = await db.select({ title: announcement.title }).from(announcement).where(eq(announcement.id, input.id)).limit(1);
   await db.delete(announcement).where(eq(announcement.id, input.id));
-  logAudit({ actorId: me.id, actorName: me.name, action: "DELETE_ANNOUNCEMENT", targetType: "announcement", targetId: input.id });
+  logAudit({ actorId: me.id, actorName: me.name, action: "DELETE_ANNOUNCEMENT", targetType: "announcement", targetId: input.id, detail: target ? { title: target.title } : undefined });
   invalidate();
   return { ok: true as const };
 }

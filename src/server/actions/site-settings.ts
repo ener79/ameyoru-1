@@ -93,6 +93,7 @@ export async function updateSiteSettingsAction(formData: FormData) {
     actorName: me.name,
     action: "UPDATE_SITE_SETTINGS",
     targetType: "site_settings",
+    detail: { siteName: parsed.data.siteName },
   });
 
   revalidatePath("/", "layout");

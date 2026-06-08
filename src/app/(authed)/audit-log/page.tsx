@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ClipboardList } from "lucide-react";
-import { formatRelativeDateTime } from "@/lib/format";
+import { formatDuration, formatRelativeDateTime, formatYuan } from "@/lib/format";
 
 type BadgeVariant =
   | "default"
@@ -81,6 +81,43 @@ const ACTION_COLOR: Record<string, BadgeVariant> = {
   UNSETTLE_GIFT: "outline",
 };
 
+const DETAIL_LABEL: Record<string, string> = {
+  playerName: "陪玩",
+  customerName: "客户",
+  payableCents: "实付",
+  playerEarnCents: "应得",
+  amount: "金额",
+  paidMethod: "方式",
+  durationMin: "时长",
+  fault: "责任方",
+  compensationCents: "补偿",
+  extraMinutes: "追加",
+  oldMin: "原时长",
+  newMin: "新时长",
+  count: "数量",
+  title: "标题",
+  userName: "用户",
+  username: "用户名",
+  siteName: "站点",
+  tier: "档位",
+  quantity: "数量",
+  sender: "赠送人",
+};
+
+const CENTS_KEYS = new Set(["payableCents", "playerEarnCents", "amount", "compensationCents"]);
+const MIN_KEYS = new Set(["durationMin", "oldMin", "newMin", "extraMinutes"]);
+const PAID_METHOD_LABEL: Record<string, string> = { WECHAT: "微信", ALIPAY: "支付宝" };
+const FAULT_LABEL: Record<string, string> = { PLAYER: "陪玩", CUSTOMER: "客户", SHOP: "店铺", OTHER: "其他" };
+
+function formatDetailValue(key: string, value: unknown): string {
+  const v = String(value);
+  if (CENTS_KEYS.has(key)) return formatYuan(Number(value));
+  if (MIN_KEYS.has(key)) return formatDuration(Number(value));
+  if (key === "paidMethod") return PAID_METHOD_LABEL[v] ?? v;
+  if (key === "fault") return FAULT_LABEL[v] ?? v;
+  return v;
+}
+
 export default async function AuditLogPage() {
   await requireSession({ role: ["BOSS"] });
 
@@ -109,13 +146,10 @@ export default async function AuditLogPage() {
                       <Badge variant={ACTION_COLOR[log.action] ?? "outline"} className="text-[10px]">
                         {ACTION_LABEL[log.action] ?? log.action}
                       </Badge>
-                      {log.targetId && (
-                        <span className="text-muted-foreground font-mono text-[10px]">{log.targetId.slice(0, 8)}…</span>
-                      )}
                     </div>
                     {Object.keys(detail).length > 0 && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {Object.entries(detail).map(([k, v]) => `${k}: ${v}`).join(" · ")}
+                        {Object.entries(detail).map(([k, v]) => `${DETAIL_LABEL[k] ?? k}: ${formatDetailValue(k, v)}`).join(" · ")}
                       </p>
                     )}
                   </div>

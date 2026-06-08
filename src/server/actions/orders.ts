@@ -131,7 +131,7 @@ export async function createOrderAction(input: CreateOrderInput) {
   }
 
   const [selectedPlayer] = await db
-    .select({ id: user.id })
+    .select({ id: user.id, name: user.name })
     .from(user)
     .where(
       and(eq(user.id, playerId), eq(user.role, "PLAYER"), eq(user.active, true))
@@ -264,7 +264,7 @@ export async function createOrderAction(input: CreateOrderInput) {
     discountCents: computed.discountCents,
     isSelfReport: me.role === "PLAYER",
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { customerName: customerRec.name, payableCents: computed.payableCents } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { playerName: selectedPlayer.name, customerName: customerRec.name, payableCents: computed.payableCents, durationMin: computed.durationMin } });
 
   return {
     ok: true as const,
@@ -283,8 +283,12 @@ export async function completeOrderAction(input: { id: string }) {
       orderStatus: order.orderStatus,
       payableCents: order.payableCents,
       playerEarnCents: order.playerEarnCents,
+      playerName: user.name,
+      customerName: customer.name,
     })
     .from(order)
+    .innerJoin(user, eq(user.id, order.playerId))
+    .innerJoin(customer, eq(customer.id, order.customerId))
     .where(eq(order.id, input.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -302,7 +306,7 @@ export async function completeOrderAction(input: { id: string }) {
     payableCents: target.payableCents,
     playerEarnCents: target.playerEarnCents,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "COMPLETE_ORDER", targetType: "order", targetId: input.id });
+  logAudit({ actorId: me.id, actorName: me.name, action: "COMPLETE_ORDER", targetType: "order", targetId: input.id, detail: { playerName: target.playerName, customerName: target.customerName, payableCents: target.payableCents } });
 
   return { ok: true as const };
 }
@@ -344,8 +348,10 @@ export async function adjustOrderDurationAction(
       commissionPerHourCents: order.commissionPerHourCents,
       discountCents: order.discountCents,
       note: order.note,
+      playerName: user.name,
     })
     .from(order)
+    .innerJoin(user, eq(user.id, order.playerId))
     .where(eq(order.id, parsed.data.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -383,7 +389,7 @@ export async function adjustOrderDurationAction(
     })
     .where(eq(order.id, target.id));
 
-  logAudit({ actorId: me.id, actorName: me.name, action: "ADJUST_ORDER_DURATION", targetType: "order", targetId: target.id, detail: { extraMinutes: parsed.data.extraMinutes } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "ADJUST_ORDER_DURATION", targetType: "order", targetId: target.id, detail: { playerName: target.playerName, oldMin: target.durationMin, newMin: newDurationMin } });
   invalidatePages(target.id);
   return { ok: true as const };
 }
@@ -425,9 +431,11 @@ export async function cancelOrderAction(input: CancelOrderInput) {
       customerId: order.customerId,
       prepayUsedCents: order.prepayUsedCents,
       customerName: customer.name,
+      playerName: user.name,
     })
     .from(order)
     .innerJoin(customer, eq(customer.id, order.customerId))
+    .innerJoin(user, eq(user.id, order.playerId))
     .where(eq(order.id, id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -506,7 +514,7 @@ export async function cancelOrderAction(input: CancelOrderInput) {
     fault,
     compensationCents,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "CANCEL_ORDER", targetType: "order", targetId: id, detail: { fault, compensationCents } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CANCEL_ORDER", targetType: "order", targetId: id, detail: { playerName: target.playerName, customerName: target.customerName, fault, compensationCents } });
 
   return { ok: true as const };
 }
@@ -558,8 +566,10 @@ export async function settleOrderAction(input: {
       orderStatus: order.orderStatus,
       playerEarnCents: order.playerEarnCents,
       playerCompensationCents: order.playerCompensationCents,
+      playerName: user.name,
     })
     .from(order)
+    .innerJoin(user, eq(user.id, order.playerId))
     .where(eq(order.id, input.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -575,13 +585,20 @@ export async function settleOrderAction(input: {
     playerEarnCents: amount,
     paidMethod: input.paidMethod,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: input.id, detail: { amount, paidMethod: input.paidMethod } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: input.id, detail: { playerName: target.playerName, amount, paidMethod: input.paidMethod } });
 
   return { ok: true as const };
 }
 
 export async function unsettleOrderAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const [info] = await db
+    .select({ playerName: user.name, customerName: customer.name, playerEarnCents: order.playerEarnCents })
+    .from(order)
+    .innerJoin(user, eq(user.id, order.playerId))
+    .innerJoin(customer, eq(customer.id, order.customerId))
+    .where(eq(order.id, input.id))
+    .limit(1);
   const result = await db
     .update(order)
     .set({ settleStatus: "UNSETTLED", settledAt: null, paidMethod: null })
@@ -589,7 +606,7 @@ export async function unsettleOrderAction(input: { id: string }) {
   if (getAffectedRows(result) !== 1) {
     return { ok: false as const, error: "订单不存在或未结算" };
   }
-  logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id });
+  logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id, detail: info ? { playerName: info.playerName, customerName: info.customerName, amount: info.playerEarnCents } : undefined });
   invalidatePages(input.id);
   return { ok: true as const };
 }

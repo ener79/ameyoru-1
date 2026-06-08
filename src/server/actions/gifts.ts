@@ -287,6 +287,12 @@ export async function settleGiftAction(input: {
 
 export async function unsettleGiftAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const [giftInfo] = await db
+    .select({ playerName: user.name, playerEarnCents: giftRecord.playerEarnCents })
+    .from(giftRecord)
+    .innerJoin(user, eq(user.id, giftRecord.playerId))
+    .where(eq(giftRecord.id, input.id))
+    .limit(1);
   const result = await db
     .update(giftRecord)
     .set({
@@ -314,6 +320,7 @@ export async function unsettleGiftAction(input: { id: string }) {
     action: "UNSETTLE_GIFT",
     targetType: "gift_record",
     targetId: input.id,
+    detail: giftInfo ? { playerName: giftInfo.playerName, amount: giftInfo.playerEarnCents } : undefined,
   });
   invalidate();
   return { ok: true as const };
