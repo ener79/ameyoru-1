@@ -9,11 +9,11 @@ import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -189,9 +189,9 @@ export function PlayerInviteForm({
               )}
             />
           </div>
-          <FormDescription className="-mt-3">
+          <p className="-mt-3 text-sm text-muted-foreground">
             密码必须超过 8 位,且包含大小写字母
-          </FormDescription>
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
@@ -221,9 +221,9 @@ export function PlayerInviteForm({
               )}
             />
           </div>
-          <FormDescription className="-mt-3">
+          <p className="-mt-3 text-sm text-muted-foreground">
             更换或删除收款码时需要输入,不要和登录密码一样
-          </FormDescription>
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
@@ -306,7 +306,7 @@ function QrInput({
 }) {
   return (
     <div className="space-y-2">
-      <FormLabel>{label}</FormLabel>
+      <Label>{label}</Label>
       <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
         <Upload className="size-5" />
         <span>{file ? file.name : `上传${label}`}</span>
@@ -315,7 +315,6 @@ function QrInput({
           accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif"
           className="hidden"
           onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          required
         />
       </label>
     </div>

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
@@ -60,7 +61,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const emptyForm: FormValues = {
+const EMPTY_FORM: FormValues = {
   type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null,
   isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
 };
@@ -85,7 +86,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: emptyForm,
+    defaultValues: EMPTY_FORM,
   });
 
   const isPermanent = form.watch("isPermanent");
@@ -93,7 +94,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   function openNew() {
     setEditItem(null);
     setEditorJson(null);
-    form.reset(emptyForm);
+    form.reset(EMPTY_FORM);
     setShowForm(true);
   }
 
@@ -227,7 +228,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
                 )}
               />
               <div>
-                <FormLabel>内容</FormLabel>
+                <Label>内容</Label>
                 <div className="mt-2">
                   <RichTextEditor
                     key={editItem?.id ?? "new"}

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Form,
@@ -114,9 +115,10 @@ export function SiteSettingsForm({ settings }: Props) {
             <p className="mt-1 text-xs text-muted-foreground">站点名称和 Logo</p>
           </div>
           <div className="space-y-2">
-            <FormLabel>Logo</FormLabel>
+            <Label>Logo</Label>
             <div className="flex items-center gap-4">
               {logoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoPreview} alt="Logo 预览" className="size-16 rounded-xl object-cover border" />
               ) : (
                 <div className="size-16 rounded-xl border border-dashed flex items-center justify-center text-muted-foreground">
@@ -206,14 +208,14 @@ export function SiteSettingsForm({ settings }: Props) {
           </div>
 
           <div className="border-t pt-4 space-y-2">
-            <FormLabel>圆角大小</FormLabel>
+            <Label>圆角大小</Label>
             <div className="flex items-center gap-3">
               <input
                 type="range"
                 min="0"
                 max="1"
                 step="0.0625"
-                value={parseFloat(borderRadius) || 0.75}
+                value={borderRadius ? parseFloat(borderRadius) : 0.75}
                 onChange={(e) => form.setValue("borderRadius", `${e.target.value}rem`)}
                 className="flex-1 accent-primary"
               />

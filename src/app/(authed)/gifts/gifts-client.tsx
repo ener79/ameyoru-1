@@ -170,9 +170,9 @@ export function GiftsAdminClient({
   const quantity = form.watch("quantity");
 
   const preview = useMemo(() => {
-    const total = giftTierCents * (quantity || 1);
-    const fee = Math.round((total * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
-    return { total, fee, earn: total - fee };
+    const totalCents = giftTierCents * (quantity || 1);
+    const fee = Math.round((totalCents * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
+    return { total: totalCents, fee, earn: totalCents - fee };
   }, [giftTierCents, quantity]);
 
   function openNew() {

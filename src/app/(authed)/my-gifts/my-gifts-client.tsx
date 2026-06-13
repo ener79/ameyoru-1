@@ -105,15 +105,17 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
   const [pending, startTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const emptyForm: GiftFormValues = {
+    playerId: myId,
+    giftTierCents: GIFT_TIER_CENTS[0],
+    quantity: 1,
+    senderNickname: "",
+    note: "",
+  };
+
   const form = useForm<GiftFormValues>({
     resolver: zodResolver(giftFormSchema),
-    defaultValues: {
-      playerId: myId,
-      giftTierCents: GIFT_TIER_CENTS[0],
-      quantity: 1,
-      senderNickname: "",
-      note: "",
-    },
+    defaultValues: emptyForm,
   });
 
   const giftTierCents = form.watch("giftTierCents");
@@ -124,9 +126,9 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
   }, [unread.length]);
 
   const preview = useMemo(() => {
-    const total = giftTierCents * (quantity || 1);
-    const fee = Math.round((total * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
-    return { total, fee, earn: total - fee };
+    const totalCents = giftTierCents * (quantity || 1);
+    const fee = Math.round((totalCents * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
+    return { total: totalCents, fee, earn: totalCents - fee };
   }, [giftTierCents, quantity]);
 
   function changeTab(t: "all" | "pending" | "settled") {
@@ -135,7 +137,7 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
 
   function openNew() {
     setEditing(null);
-    form.reset({ playerId: myId, giftTierCents: GIFT_TIER_CENTS[0], quantity: 1, senderNickname: "", note: "" });
+    form.reset(emptyForm);
     setFormOpen(true);
   }
 
