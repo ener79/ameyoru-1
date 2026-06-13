@@ -1,13 +1,14 @@
 import { requireSession } from "@/lib/auth-helpers";
 import { db } from "@/db";
 import { auditLog } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ClipboardList } from "lucide-react";
 import { formatDuration, formatRelativeDateTime, formatYuan } from "@/lib/format";
+import { AuditFilterBar } from "./audit-filter-bar";
 
 type BadgeVariant =
   | "default"
@@ -118,49 +119,113 @@ function formatDetailValue(key: string, value: unknown): string {
   return v;
 }
 
-export default async function AuditLogPage() {
+export default async function AuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ actor?: string; action?: string }>;
+}) {
   await requireSession({ role: ["BOSS"] });
+
+  const params = await searchParams;
+  const actor = params.actor?.trim() ?? "";
+  const action = params.action?.trim() ?? "";
+
+  // 操作人下拉:按最近活跃排序,同一 actorId 取最新用过的名字去重
+  const actorRows = await db
+    .select({
+      actorId: auditLog.actorId,
+      actorName: auditLog.actorName,
+      lastAt: sql<string>`MAX(${auditLog.createdAt})`.as("last_at"),
+    })
+    .from(auditLog)
+    .groupBy(auditLog.actorId, auditLog.actorName)
+    .orderBy(desc(sql`MAX(${auditLog.createdAt})`));
+  const seenActor = new Set<string>();
+  const actorOptions: { id: string; name: string }[] = [];
+  for (const r of actorRows) {
+    if (seenActor.has(r.actorId)) continue;
+    seenActor.add(r.actorId);
+    actorOptions.push({ id: r.actorId, name: r.actorName });
+  }
+
+  // 操作类型下拉:只列日志里真实出现过的类型
+  const actionRows = await db
+    .selectDistinct({ action: auditLog.action })
+    .from(auditLog);
+  const actionOptions = actionRows
+    .map((r) => ({ value: r.action, label: ACTION_LABEL[r.action] ?? r.action }))
+    .sort((a, b) => a.label.localeCompare(b.label, "zh"));
+
+  const conditions = [];
+  if (actor) conditions.push(eq(auditLog.actorId, actor));
+  if (action) conditions.push(eq(auditLog.action, action));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const logs = await db
     .select()
     .from(auditLog)
+    .where(where)
     .orderBy(desc(auditLog.createdAt))
     .limit(300);
 
+  const hasFilter = !!actor || !!action;
+  const tableEmpty = actorOptions.length === 0;
+
   return (
     <>
-      <PageHeader title="操作日志" description="最近 300 条操作记录" />
-      {logs.length === 0 ? (
+      <PageHeader
+        title="操作日志"
+        description={
+          hasFilter ? `筛选结果 · ${logs.length} 条` : "最近 300 条操作记录"
+        }
+      />
+      {tableEmpty ? (
         <EmptyState icon={<ClipboardList />} title="暂无操作记录" />
       ) : (
-        <Card className="overflow-hidden p-0">
-          <ul className="divide-y text-sm">
-            {logs.map((log) => {
-              let detail: Record<string, unknown> = {};
-              try { detail = log.detail ? JSON.parse(log.detail) : {}; } catch {}
-              return (
-                <li key={log.id} className="flex items-start gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{log.actorName}</span>
-                      <Badge variant={ACTION_COLOR[log.action] ?? "outline"} className="text-[10px]">
-                        {ACTION_LABEL[log.action] ?? log.action}
-                      </Badge>
-                    </div>
-                    {Object.keys(detail).length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {Object.entries(detail).map(([k, v]) => `${DETAIL_LABEL[k] ?? k}: ${formatDetailValue(k, v)}`).join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                    {formatRelativeDateTime(log.createdAt)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+        <>
+          <AuditFilterBar
+            actor={actor}
+            action={action}
+            actorOptions={actorOptions}
+            actionOptions={actionOptions}
+          />
+          {logs.length === 0 ? (
+            <EmptyState
+              icon={<ClipboardList />}
+              title="没有匹配的记录"
+              description="换个操作人或操作类型试试"
+            />
+          ) : (
+            <Card className="overflow-hidden p-0">
+              <ul className="divide-y text-sm">
+                {logs.map((log) => {
+                  let detail: Record<string, unknown> = {};
+                  try { detail = log.detail ? JSON.parse(log.detail) : {}; } catch {}
+                  return (
+                    <li key={log.id} className="flex items-start gap-3 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{log.actorName}</span>
+                          <Badge variant={ACTION_COLOR[log.action] ?? "outline"} className="text-[10px]">
+                            {ACTION_LABEL[log.action] ?? log.action}
+                          </Badge>
+                        </div>
+                        {Object.keys(detail).length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {Object.entries(detail).map(([k, v]) => `${DETAIL_LABEL[k] ?? k}: ${formatDetailValue(k, v)}`).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
+                        {formatRelativeDateTime(log.createdAt)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+        </>
       )}
     </>
   );
