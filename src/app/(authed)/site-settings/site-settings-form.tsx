@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,8 +81,15 @@ export function SiteSettingsForm({ settings }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setLogoFile(file);
+    if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
     setLogoPreview(URL.createObjectURL(file));
   }
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
 
   function onSubmit(values: FormValues) {
     const fd = new FormData();

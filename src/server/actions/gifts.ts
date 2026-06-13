@@ -337,7 +337,9 @@ export async function unsettleGiftAction(input: { id: string }) {
 
 export async function listGiftRecords(filter: ListGiftRecordFilter) {
   await requireSession({ role: ["BOSS", "STAFF"] });
-  const f = listFilterSchema.parse(filter);
+  const parsed = listFilterSchema.safeParse(filter);
+  if (!parsed.success) return { records: [], total: 0, pendingCount: 0, rows: [], page: 1, pageSize: 50 };
+  const f = parsed.data;
 
   const conds = [];
   if (f.playerId) conds.push(eq(giftRecord.playerId, f.playerId));
@@ -592,7 +594,9 @@ function rangeStart(range: z.infer<typeof rangeSchema>): Date | null {
 export async function giftLeaderboard(range: "today" | "week" | "month" | "all" = "all") {
   const { user: me } = await requireSession();
   const isManager = me.role === "BOSS" || me.role === "STAFF";
-  const r = rangeSchema.parse(range);
+  const parsed = rangeSchema.safeParse(range);
+  if (!parsed.success) return { senders: [], players: [], pairs: [] };
+  const r = parsed.data;
   const since = rangeStart(r);
 
   const baseConds = [eq(giftRecord.settleStatus, "SETTLED")];

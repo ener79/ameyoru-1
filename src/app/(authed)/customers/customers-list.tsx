@@ -883,12 +883,16 @@ function CustomerLedgerDialog({
   onClose: () => void;
 }) {
   const [rows, setRows] = useState<CustomerLedgerRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     startTransition(async () => {
       const res = await getCustomerLedgerAction({ customerId: customer.id });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError("error" in res ? String(res.error) : "加载失败");
+        return;
+      }
       setRows(res.rows);
     });
   }, [customer.id]);
@@ -906,7 +910,9 @@ function CustomerLedgerDialog({
         </DialogHeader>
 
         <div className="max-h-[60vh] overflow-y-auto rounded-lg border">
-          {pending && !rows ? (
+          {error ? (
+            <div className="p-8 text-center text-sm text-destructive">{error}</div>
+          ) : pending && !rows ? (
             <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" />
               加载中

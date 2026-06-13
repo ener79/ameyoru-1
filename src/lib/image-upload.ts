@@ -110,7 +110,7 @@ export async function readImageUpload(
   opts: { maxBytes: number; label: string }
 ): Promise<{ ok: true; upload: ImageUpload } | { ok: false; error: string }> {
   if (file.size > opts.maxBytes) {
-    return { ok: false, error: `${opts.label}不能超过 20MB` };
+    return { ok: false, error: `${opts.label}不能超过 ${Math.floor(opts.maxBytes / 1024 / 1024)}MB` };
   }
 
   const type = file.type.toLowerCase();
