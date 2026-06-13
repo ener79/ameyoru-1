@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
+import { MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { customerSummary } from "@/server/stats";
 import { formatYuan, yuanStringToCents } from "@/lib/format";
 import { nanoid } from "../id";
@@ -95,6 +96,9 @@ export async function addCustomerDepositAction(
   if (amountCents <= 0) {
     return { ok: false as const, error: "充值金额必须大于 0" };
   }
+  if (amountCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "充值金额超出上限" };
+  }
 
   const [existing] = await db
     .select({ id: customer.id })
@@ -139,6 +143,9 @@ export async function deductCustomerBalanceAction(
   const amountCents = yuanStringToCents(amountYuan);
   if (amountCents <= 0) {
     return { ok: false as const, error: "扣减金额必须大于 0" };
+  }
+  if (amountCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "扣减金额超出上限" };
   }
 
   const uniquePlayerIds = Array.from(new Set(playerIds));
@@ -224,19 +231,23 @@ export async function mergeCustomersAction(input: z.infer<typeof mergeSchema>) {
   }
 
   const allIds = [primaryId, ...uniqueMergeIds];
-  const found = await db
-    .select({ id: customer.id, balanceCents: customer.balanceCents })
-    .from(customer)
-    .where(inArray(customer.id, allIds));
-  if (found.length !== allIds.length) {
-    return { ok: false as const, error: "客户不存在或已被删除" };
-  }
 
-  const mergeBalance = found
-    .filter((c) => uniqueMergeIds.includes(c.id))
-    .reduce((sum, c) => sum + c.balanceCents, 0);
+  let mergedCount: number;
+  try {
+    mergedCount = await db.transaction(async (tx) => {
+    const found = await tx
+      .select({ id: customer.id, balanceCents: customer.balanceCents })
+      .from(customer)
+      .where(inArray(customer.id, allIds))
+      .for("update");
+    if (found.length !== allIds.length) {
+      throw new Error("客户不存在或已被删除");
+    }
 
-  await db.transaction(async (tx) => {
+    const mergeBalance = found
+      .filter((c) => uniqueMergeIds.includes(c.id))
+      .reduce((sum, c) => sum + c.balanceCents, 0);
+
     await tx
       .update(order)
       .set({ customerId: primaryId })
@@ -257,11 +268,18 @@ export async function mergeCustomersAction(input: z.infer<typeof mergeSchema>) {
     }
 
     await tx.delete(customer).where(inArray(customer.id, uniqueMergeIds));
-  });
+    return uniqueMergeIds.length;
+    });
+  } catch (e) {
+    return {
+      ok: false as const,
+      error: e instanceof Error ? e.message : "合并失败",
+    };
+  }
 
   revalidatePath("/customers");
   revalidatePath("/orders");
-  return { ok: true as const, mergedCount: uniqueMergeIds.length };
+  return { ok: true as const, mergedCount };
 }
 
 export async function deleteCustomerAction(input: { id: string }) {

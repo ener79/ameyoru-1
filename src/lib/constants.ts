@@ -11,6 +11,13 @@ export const DEFAULT_COMMISSION_PER_HOUR_CENTS = 500;
 /** 陪玩默认单价(分/小时),老板创建陪玩时若不填使用。 */
 export const DEFAULT_PLAYER_RATE_CENTS = 4000;
 
+/**
+ * 单笔金额上限(分)。所有用户可填的金额(充值/扣减/单价/优惠/补偿)入口都用它兜底。
+ * MySQL int 上限约 21.47 亿分(2147 万元),这里取 1 亿分(100 万元)留足安全余量,
+ * 防止大额输入导致 int 列溢出、金额错乱。
+ */
+export const MAX_AMOUNT_CENTS = 100_000_000;
+
 /** 分类下的可选单价档位(分/小时),用于陪玩分组、派单选人、邀请链接和新建对话框。 */
 export const PRICE_BUCKETS_CENTS: Record<PlayerGender, number[]> = {
   MALE: [3500, 4000, 4500, 5000, 5500],

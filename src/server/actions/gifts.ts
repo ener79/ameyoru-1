@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { giftRecord, user, GIFT_TIER_CENTS } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
-import { DEFAULT_GIFT_FEE_RATE_BP, GIFT_TIER_LABELS } from "@/lib/constants";
+import { DEFAULT_GIFT_FEE_RATE_BP, GIFT_TIER_LABELS, MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { nanoid } from "../id";
 import { logAudit } from "@/server/audit";
 
@@ -90,6 +90,9 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
   }
 
   const totalCents = d.giftTierCents * d.quantity;
+  if (totalCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "礼物总金额超出上限" };
+  }
   const feeRateBp = DEFAULT_GIFT_FEE_RATE_BP;
   const { platformFee, playerEarn } = computeSplit(totalCents, feeRateBp);
 

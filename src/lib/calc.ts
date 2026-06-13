@@ -38,7 +38,9 @@ export function computeOrder(input: {
   const original = proRate(input.hourlyRateCents, durationMin);
   const payable = Math.max(0, original - discount);
   const commission = proRate(commissionPerHour, durationMin);
-  const playerEarn = original - commission;
+  // 兜底:单价低于抽成时薪时 original < commission,陪玩应得不能为负。
+  // 创建订单时已校验单价 ≥ 抽成,这里再防御历史脏数据/异常输入。
+  const playerEarn = Math.max(0, original - commission);
 
   return {
     durationMin,

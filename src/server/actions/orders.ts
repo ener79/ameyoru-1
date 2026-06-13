@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
 import { computeOrder } from "@/lib/calc";
 import { yuanStringToCents } from "@/lib/format";
-import { DEFAULT_COMMISSION_PER_HOUR_CENTS } from "@/lib/constants";
+import { DEFAULT_COMMISSION_PER_HOUR_CENTS, MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { generateMemberNo, nanoid } from "../id";
 import { logAudit } from "../audit";
 import {
@@ -176,12 +176,25 @@ export async function createOrderAction(input: CreateOrderInput) {
   if (hourlyRateCents <= 0) {
     return { ok: false as const, error: "单价必须大于 0" };
   }
+  if (hourlyRateCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "单价超出上限" };
+  }
+  // 单价必须 ≥ 抽成时薪,否则陪玩应得为负,订单会卡死无法取消/结算
+  if (hourlyRateCents < DEFAULT_COMMISSION_PER_HOUR_CENTS) {
+    return {
+      ok: false as const,
+      error: `单价不能低于抽成时薪(${DEFAULT_COMMISSION_PER_HOUR_CENTS / 100} 元/小时)`,
+    };
+  }
 
   // 陪玩自报不允许填优惠
   const discountCents =
     me.role === "PLAYER" || !data.discountYuan
       ? 0
       : yuanStringToCents(data.discountYuan);
+  if (discountCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "优惠金额超出上限" };
+  }
 
   const computed = computeOrder({
     startAt,
@@ -317,7 +330,7 @@ export async function completeOrderAction(input: { id: string }) {
  */
 const adjustSchema = z.object({
   id: z.string(),
-  extraMinutes: z.number().int().min(1, "至少增加 1 分钟"),
+  extraMinutes: z.number().int().min(1, "至少增加 1 分钟").max(24 * 60, "单次最多增加 24 小时"),
   note: z
     .string()
     .max(500)
@@ -449,6 +462,9 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   const compensationCents = compensationYuan
     ? Math.max(0, yuanStringToCents(compensationYuan))
     : 0;
+  if (compensationCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "补偿金额超出上限" };
+  }
   if (compensationCents > target.playerEarnCents) {
     return { ok: false as const, error: "补偿不能超过原应得金额" };
   }
@@ -599,12 +615,20 @@ export async function unsettleOrderAction(input: { id: string }) {
     .innerJoin(customer, eq(customer.id, order.customerId))
     .where(eq(order.id, input.id))
     .limit(1);
+  // 禁止撤销「已取消」单的结算:取消单的 SETTLED 是退款流程的终态,
+  // 撤销会让预存退款与结算状态错位,且可能被重复结算。只允许撤销已完成单。
   const result = await db
     .update(order)
     .set({ settleStatus: "UNSETTLED", settledAt: null, paidMethod: null })
-    .where(and(eq(order.id, input.id), eq(order.settleStatus, "SETTLED")));
+    .where(
+      and(
+        eq(order.id, input.id),
+        eq(order.settleStatus, "SETTLED"),
+        eq(order.orderStatus, "COMPLETED")
+      )
+    );
   if (getAffectedRows(result) !== 1) {
-    return { ok: false as const, error: "订单不存在或未结算" };
+    return { ok: false as const, error: "只能撤销已完成订单的结算" };
   }
   logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id, detail: info ? { playerName: info.playerName, customerName: info.customerName, amount: info.playerEarnCents } : undefined });
   invalidatePages(input.id);
