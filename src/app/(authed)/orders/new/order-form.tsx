@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,8 +64,7 @@ export function OrderForm({
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   useEffect(() => {
-    const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const local = format(new Date(), "yyyy-MM-dd'T'HH:mm");
     setStartAt(local);
     setEndAt(local);
   }, []);

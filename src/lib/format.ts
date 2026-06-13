@@ -1,3 +1,5 @@
+import { format, isToday, isYesterday, isSameYear } from "date-fns";
+
 /** 把"分"格式化成 ¥xx.xx */
 export function formatYuan(cents: number): string {
   if (!Number.isFinite(cents)) return "¥0.00";
@@ -31,20 +33,13 @@ export function formatDuration(min: number): string {
   return `${h}h${m.toString().padStart(2, "0")}`;
 }
 
-const pad = (n: number) => n.toString().padStart(2, "0");
-
 function toDate(date: Date | string | number): Date {
   return date instanceof Date ? date : new Date(date);
 }
 
-function formatTime(date: Date): string {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 /** 日期时间 yyyy-MM-dd HH:mm */
 export function formatDateTime(date: Date | string | number): string {
-  const d = toDate(date);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${formatTime(d)}`;
+  return format(toDate(date), "yyyy-MM-dd HH:mm");
 }
 
 /** 给 startAt + durationMin 算结束时间。始终返回完整的 yyyy-MM-dd HH:mm,和开始时间对齐。 */
@@ -58,29 +53,18 @@ export function formatEndAt(
 
 /** 仅日期 yyyy-MM-dd */
 export function formatDate(date: Date | string | number): string {
-  const d = toDate(date);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return format(toDate(date), "yyyy-MM-dd");
 }
 
 /** "今天 14:30" / "昨天 14:30" / "5月20日 14:30" / "2025年5月20日 14:30" */
 export function formatRelativeDateTime(date: Date | string | number): string {
   const d = toDate(date);
-  const now = new Date();
-  const time = formatTime(d);
+  const time = format(d, "HH:mm");
 
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-
-  if (isSameDay(d, now)) return `今天 ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (isSameDay(d, yesterday)) return `昨天 ${time}`;
-  if (d.getFullYear() === now.getFullYear()) {
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${time}`;
-  }
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${time}`;
+  if (isToday(d)) return `今天 ${time}`;
+  if (isYesterday(d)) return `昨天 ${time}`;
+  if (isSameYear(d, new Date())) return `${format(d, "M月d日")} ${time}`;
+  return `${format(d, "yyyy年M月d日")} ${time}`;
 }
 
 /** 取显示名的首字符做头像(中文取最后一字,英文取首字母) */
