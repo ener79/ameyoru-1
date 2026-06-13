@@ -183,7 +183,11 @@ export async function shopSummary(range: RangeKey) {
     );
 
   const [inProgress] = await db
-    .select({ count: count() })
+    .select({
+      count: count(),
+      durationMin: sum(order.durationMin).mapWith(Number),
+      payableCents: sum(order.payableCents).mapWith(Number),
+    })
     .from(order)
     .where(eq(order.orderStatus, "IN_PROGRESS"));
 
@@ -205,6 +209,8 @@ export async function shopSummary(range: RangeKey) {
     /** 店铺毛利:实付 − 陪玩应得(含取消补偿),取消单的补偿都是店里出 */
     shopProfitCents: payable - playerEarn,
     inProgressCount: inProgress?.count ?? 0,
+    inProgressDurationMin: inProgress?.durationMin ?? 0,
+    inProgressPayableCents: inProgress?.payableCents ?? 0,
     pendingCount: pending.count,
     pendingEarnCents: pending.cents,
   };

@@ -47,7 +47,11 @@ export async function ManagerOverview({ userName }: { userName: string }) {
         <KpiCard
           label="进行中"
           value={`${today.inProgressCount} 单`}
-          hint={today.inProgressCount > 0 ? undefined : "暂无进行中"}
+          hint={
+            today.inProgressCount > 0
+              ? `${formatDuration(today.inProgressDurationMin)} · ${formatYuan(today.inProgressPayableCents)}`
+              : "暂无进行中"
+          }
           emphasis={today.inProgressCount > 0}
         />
         <KpiCard
