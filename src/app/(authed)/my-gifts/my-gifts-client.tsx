@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
 import { Gift, Sparkles, Plus, Pencil, Trash2, Clock, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +18,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
@@ -27,10 +37,9 @@ import { cn } from "@/lib/utils";
 import {
   upsertGiftRecordAction,
   deleteGiftRecordAction,
-  type UpsertGiftRecordInput,
 } from "@/server/actions/gifts";
 
-interface Record {
+interface GiftRecord {
   id: string;
   giftTierCents: number;
   quantity: number;
@@ -65,42 +74,60 @@ interface GiftStats {
 }
 
 interface Props {
-  records: Record[];
+  records: GiftRecord[];
   unread: UnreadRecord[];
   myId: string;
   tab: "all" | "pending" | "settled";
   stats: GiftStats;
 }
 
-const EMPTY_FORM = {
-  playerId: "",
-  giftTierCents: GIFT_TIER_CENTS[0],
-  quantity: 1,
-  senderNickname: "",
-  note: "",
-} satisfies UpsertGiftRecordInput;
+const GIFT_TIER_SET = new Set<number>(GIFT_TIER_CENTS);
+
+const giftFormSchema = z.object({
+  id: z.string().optional(),
+  playerId: z.string(),
+  giftTierCents: z
+    .number()
+    .int()
+    .refine((v) => GIFT_TIER_SET.has(v), "档位不合法"),
+  quantity: z.coerce.number().int().min(1).max(999),
+  senderNickname: z.string().trim().min(1, "请填写打赏人昵称").max(100),
+  note: z.string().max(500).nullable(),
+});
+
+type GiftFormValues = z.infer<typeof giftFormSchema>;
 
 export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
   const router = useRouter();
   const [popupOpen, setPopupOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Record | null>(null);
-  const [form, setForm] = useState<UpsertGiftRecordInput>({
-    ...EMPTY_FORM,
-    playerId: myId,
-  });
+  const [editing, setEditing] = useState<GiftRecord | null>(null);
   const [pending, startTransition] = useTransition();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const form = useForm<GiftFormValues>({
+    resolver: zodResolver(giftFormSchema),
+    defaultValues: {
+      playerId: myId,
+      giftTierCents: GIFT_TIER_CENTS[0],
+      quantity: 1,
+      senderNickname: "",
+      note: "",
+    },
+  });
+
+  const giftTierCents = form.watch("giftTierCents");
+  const quantity = form.watch("quantity");
 
   useEffect(() => {
     if (unread.length > 0) setPopupOpen(true);
   }, [unread.length]);
 
   const preview = useMemo(() => {
-    const total = form.giftTierCents * form.quantity;
+    const total = giftTierCents * (quantity || 1);
     const fee = Math.round((total * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
     return { total, fee, earn: total - fee };
-  }, [form.giftTierCents, form.quantity]);
+  }, [giftTierCents, quantity]);
 
   function changeTab(t: "all" | "pending" | "settled") {
     router.push(t === "all" ? "/my-gifts" : `/my-gifts?tab=${t}`);
@@ -108,13 +135,13 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
 
   function openNew() {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, playerId: myId });
+    form.reset({ playerId: myId, giftTierCents: GIFT_TIER_CENTS[0], quantity: 1, senderNickname: "", note: "" });
     setFormOpen(true);
   }
 
-  function openEdit(r: Record) {
+  function openEdit(r: GiftRecord) {
     setEditing(r);
-    setForm({
+    form.reset({
       id: r.id,
       playerId: myId,
       giftTierCents: r.giftTierCents,
@@ -125,13 +152,9 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
     setFormOpen(true);
   }
 
-  function submit() {
-    if (!form.senderNickname.trim()) {
-      toast.error("请填写打赏人昵称");
-      return;
-    }
+  function onSubmit(values: GiftFormValues) {
     startTransition(async () => {
-      const res = await upsertGiftRecordAction(form);
+      const res = await upsertGiftRecordAction(values);
       if (res.ok) {
         toast.success(editing ? "已更新" : "已提交,等待管理员支付");
         setFormOpen(false);
@@ -318,89 +341,107 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
           <DialogHeader>
             <DialogTitle>{editing ? "编辑报单" : "新增礼物报单"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>礼物档位 *</Label>
-              <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {GIFT_TIER_CENTS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setForm({ ...form, giftTierCents: t })}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                      form.giftTierCents === t
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-input hover:bg-accent"
-                    )}
-                  >
-                    {GIFT_TIER_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label>数量</Label>
-              <Input
-                type="number"
-                min={1}
-                max={999}
-                className="mt-1"
-                value={form.quantity}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    quantity: Math.max(1, Math.min(999, Number(e.target.value) || 1)),
-                  })
-                }
+          <Form {...form}>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="giftTierCents"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>礼物档位 *</FormLabel>
+                    <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                      {GIFT_TIER_CENTS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => field.onChange(t)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                            field.value === t
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-input hover:bg-accent"
+                          )}
+                        >
+                          {GIFT_TIER_LABELS[t]}
+                        </button>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <Label>打赏人昵称 *</Label>
-              <Input
-                className="mt-1"
-                placeholder="例如:抖音用户 xxx"
-                value={form.senderNickname}
-                onChange={(e) => setForm({ ...form, senderNickname: e.target.value })}
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>数量</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={1} max={999} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <Label>备注</Label>
-              <textarea
-                className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[60px]"
-                placeholder="选填"
-                value={form.note ?? ""}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              <FormField
+                control={form.control}
+                name="senderNickname"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>打赏人昵称 *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例如:抖音用户 xxx" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <Card className="bg-muted/50 p-3 text-sm font-mono tabular-nums">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">总额</span>
-                <span>{formatYuan(preview.total)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  平台抽成 ({(DEFAULT_GIFT_FEE_RATE_BP / 100).toFixed(0)}%)
-                </span>
-                <span className="text-orange-600">
-                  − {formatYuan(preview.fee)}
-                </span>
-              </div>
-              <div className="mt-1 flex justify-between border-t pt-2 font-semibold">
-                <span>你到手</span>
-                <span className="text-primary">{formatYuan(preview.earn)}</span>
-              </div>
-            </Card>
-          </div>
+              <FormField
+                control={form.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>备注</FormLabel>
+                    <FormControl>
+                      <textarea
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm min-h-[60px] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
+                        placeholder="选填"
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <Card className="bg-muted/50 p-3 text-sm font-mono tabular-nums">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">总额</span>
+                  <span>{formatYuan(preview.total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    平台抽成 ({(DEFAULT_GIFT_FEE_RATE_BP / 100).toFixed(0)}%)
+                  </span>
+                  <span className="text-orange-600">
+                    − {formatYuan(preview.fee)}
+                  </span>
+                </div>
+                <div className="mt-1 flex justify-between border-t pt-2 font-semibold">
+                  <span>你到手</span>
+                  <span className="text-primary">{formatYuan(preview.earn)}</span>
+                </div>
+              </Card>
+            </div>
+          </Form>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setFormOpen(false)}>
               取消
             </Button>
-            <Button onClick={submit} disabled={pending}>
+            <Button onClick={form.handleSubmit(onSubmit)} disabled={pending}>
               {editing ? "保存" : "提交报单"}
             </Button>
           </DialogFooter>

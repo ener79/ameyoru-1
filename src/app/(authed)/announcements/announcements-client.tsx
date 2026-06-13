@@ -2,23 +2,32 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Megaphone, PartyPopper, Trash2, ToggleLeft, ToggleRight, Pencil } from "lucide-react";
+import { Plus, Megaphone, Trash2, ToggleLeft, ToggleRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { formatDate } from "@/lib/format";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { upsertAnnouncementAction, toggleAnnouncementAction, deleteAnnouncementAction } from "@/server/actions/announcements";
-import type { UpsertAnnouncementInput } from "@/server/actions/announcements";
 import type { JSONContent } from "@tiptap/react";
 
 interface Item {
@@ -36,7 +45,26 @@ interface Item {
   createdAt: string;
 }
 
-/** 旧公告只有纯文本时,用它初始化编辑器,避免编辑保存后内容丢失 */
+const formSchema = z.object({
+  id: z.string().optional(),
+  type: z.enum(["NOTICE", "ACTIVITY"]),
+  title: z.string().min(1, "请填写标题").max(100),
+  content: z.string().max(5000).nullable(),
+  contentJson: z.string().max(100000).nullable(),
+  contentHtml: z.string().max(100000).nullable(),
+  isPermanent: z.boolean(),
+  startAt: z.string().nullable(),
+  endAt: z.string().nullable(),
+  sortOrder: z.coerce.number().int(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+const emptyForm: FormValues = {
+  type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null,
+  isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
+};
+
 function textToDoc(text: string): JSONContent {
   return {
     type: "doc",
@@ -52,17 +80,20 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   const [pending, startTransition] = useTransition();
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [showForm, setShowForm] = useState(false);
-
-  const [form, setForm] = useState<UpsertAnnouncementInput>({
-    type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
-  });
   const [editorJson, setEditorJson] = useState<JSONContent | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: emptyForm,
+  });
+
+  const isPermanent = form.watch("isPermanent");
 
   function openNew() {
     setEditItem(null);
     setEditorJson(null);
-    setForm({ type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0 });
+    form.reset(emptyForm);
     setShowForm(true);
   }
 
@@ -74,15 +105,31 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
       ? textToDoc(item.content)
       : null;
     setEditorJson(json);
-    setForm({ id: item.id, type: item.type, title: item.title, content: item.content ?? "", contentJson: item.contentJson, contentHtml: item.contentHtml, isPermanent: item.isPermanent, startAt: item.startAt?.slice(0, 16) ?? null, endAt: item.endAt?.slice(0, 16) ?? null, sortOrder: item.sortOrder });
+    form.reset({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      content: item.content ?? "",
+      contentJson: item.contentJson,
+      contentHtml: item.contentHtml,
+      isPermanent: item.isPermanent,
+      startAt: item.startAt?.slice(0, 16) ?? null,
+      endAt: item.endAt?.slice(0, 16) ?? null,
+      sortOrder: item.sortOrder,
+    });
     setShowForm(true);
   }
 
-  function submit() {
+  function onSubmit(values: FormValues) {
     startTransition(async () => {
-      const res = await upsertAnnouncementAction(form);
-      if (res.ok) { toast.success(editItem ? "已更新" : "已创建"); setShowForm(false); router.refresh(); }
-      else toast.error(res.error);
+      const res = await upsertAnnouncementAction(values);
+      if (res.ok) {
+        toast.success(editItem ? "已更新" : "已创建");
+        setShowForm(false);
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
     });
   }
 
@@ -105,8 +152,8 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   return (
     <>
       <PageHeader title="公告管理" description="管理首页公告和活动" action={
-<Button onClick={openNew}><Plus className="size-4" /> 新增</Button>
-} />
+        <Button onClick={openNew}><Plus className="size-4" /> 新增</Button>
+      } />
 
       {items.length === 0 ? (
         <EmptyState icon={<Megaphone />} title="暂无公告" />
@@ -145,48 +192,123 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editItem ? "编辑" : "新增"}公告/活动</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>类型</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as "NOTICE" | "ACTIVITY" })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NOTICE">公告</SelectItem>
-                  <SelectItem value="ACTIVITY">活动</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>标题</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-            <div>
-              <Label>内容</Label>
-              <div className="mt-1">
-                <RichTextEditor
-                  key={editItem?.id ?? "new"}
-                  content={editorJson}
-                  onChange={({ json, html, text }) => {
-                    setForm((f) => ({
-                      ...f,
-                      contentJson: JSON.stringify(json),
-                      contentHtml: html,
-                      content: text,
-                    }));
-                  }}
-                />
+          <Form {...form}>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>类型</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="NOTICE">公告</SelectItem>
+                        <SelectItem value="ACTIVITY">活动</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>标题</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div>
+                <FormLabel>内容</FormLabel>
+                <div className="mt-2">
+                  <RichTextEditor
+                    key={editItem?.id ?? "new"}
+                    content={editorJson}
+                    onChange={({ json, html, text }) => {
+                      form.setValue("contentJson", JSON.stringify(json));
+                      form.setValue("contentHtml", html);
+                      form.setValue("content", text);
+                    }}
+                  />
+                </div>
               </div>
+              <FormField
+                control={form.control}
+                name="isPermanent"
+                render={({ field }) => (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="perm"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <FormLabel htmlFor="perm" className="!mt-0">长期有效</FormLabel>
+                  </div>
+                )}
+              />
+              {!isPermanent && (
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="startAt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>开始时间</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value || null)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endAt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>结束时间</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value || null)}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+              <FormField
+                control={form.control}
+                name="sortOrder"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>排序（越大越前）</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox id="perm" checked={form.isPermanent ?? false} onCheckedChange={(v) => setForm({ ...form, isPermanent: !!v })} />
-              <Label htmlFor="perm">长期有效</Label>
-            </div>
-            {!form.isPermanent && (
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>开始时间</Label><Input type="datetime-local" className="mt-1" value={form.startAt ?? ""} onChange={(e) => setForm({ ...form, startAt: e.target.value || null })} /></div>
-                <div><Label>结束时间</Label><Input type="datetime-local" className="mt-1" value={form.endAt ?? ""} onChange={(e) => setForm({ ...form, endAt: e.target.value || null })} /></div>
-              </div>
-            )}
-            <div><Label>排序（越大越前）</Label><Input type="number" className="mt-1" value={form.sortOrder ?? 0} onChange={(e) => setForm({ ...form, sortOrder: parseInt(e.target.value) || 0 })} /></div>
-          </div>
-          <DialogFooter><Button onClick={submit} disabled={pending}>{editItem ? "保存" : "创建"}</Button></DialogFooter>
+          </Form>
+          <DialogFooter>
+            <Button onClick={form.handleSubmit(onSubmit)} disabled={pending}>
+              {editItem ? "保存" : "创建"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

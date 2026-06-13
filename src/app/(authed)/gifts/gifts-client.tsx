@@ -2,6 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { toast } from "sonner";
 import {
   Plus,
@@ -27,7 +30,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Pagination } from "@/components/pagination";
@@ -42,12 +53,11 @@ import {
   deleteGiftRecordAction,
   settleGiftAction,
   unsettleGiftAction,
-  type UpsertGiftRecordInput,
 } from "@/server/actions/gifts";
 
 interface Props {
   players: PlayerOption[];
-  records: Record[];
+  records: GiftRecord[];
   total: number;
   pendingCount: number;
   page: number;
@@ -61,7 +71,7 @@ interface Props {
   };
 }
 
-interface Record {
+interface GiftRecord {
   id: string;
   playerId: string;
   playerName: string;
@@ -85,7 +95,23 @@ interface Record {
   createdAt: string;
 }
 
-const EMPTY_FORM: UpsertGiftRecordInput = {
+const GIFT_TIER_SET = new Set<number>(GIFT_TIER_CENTS);
+
+const giftFormSchema = z.object({
+  id: z.string().optional(),
+  playerId: z.string().min(1, "请选择陪玩"),
+  giftTierCents: z
+    .number()
+    .int()
+    .refine((v) => GIFT_TIER_SET.has(v), "档位不合法"),
+  quantity: z.coerce.number().int().min(1).max(999),
+  senderNickname: z.string().trim().min(1, "请填写打赏人昵称").max(100),
+  note: z.string().max(500).nullable(),
+});
+
+type GiftFormValues = z.infer<typeof giftFormSchema>;
+
+const EMPTY_FORM: GiftFormValues = {
   playerId: "",
   giftTierCents: GIFT_TIER_CENTS[0],
   quantity: 1,
@@ -130,26 +156,33 @@ export function GiftsAdminClient({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Record | null>(null);
-  const [form, setForm] = useState<UpsertGiftRecordInput>(EMPTY_FORM);
-  const [payTarget, setPayTarget] = useState<Record | null>(null);
+  const [editing, setEditing] = useState<GiftRecord | null>(null);
+  const [payTarget, setPayTarget] = useState<GiftRecord | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: "delete" | "unsettle"; id: string } | null>(null);
 
+  const form = useForm<GiftFormValues>({
+    resolver: zodResolver(giftFormSchema),
+    defaultValues: EMPTY_FORM,
+  });
+
+  const giftTierCents = form.watch("giftTierCents");
+  const quantity = form.watch("quantity");
+
   const preview = useMemo(() => {
-    const total = form.giftTierCents * form.quantity;
+    const total = giftTierCents * (quantity || 1);
     const fee = Math.round((total * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
     return { total, fee, earn: total - fee };
-  }, [form.giftTierCents, form.quantity]);
+  }, [giftTierCents, quantity]);
 
   function openNew() {
     setEditing(null);
-    setForm({ ...EMPTY_FORM });
+    form.reset(EMPTY_FORM);
     setShowForm(true);
   }
 
-  function openEdit(r: Record) {
+  function openEdit(r: GiftRecord) {
     setEditing(r);
-    setForm({
+    form.reset({
       id: r.id,
       playerId: r.playerId,
       giftTierCents: r.giftTierCents,
@@ -160,17 +193,9 @@ export function GiftsAdminClient({
     setShowForm(true);
   }
 
-  function submit() {
-    if (!form.playerId) {
-      toast.error("请选择陪玩");
-      return;
-    }
-    if (!form.senderNickname.trim()) {
-      toast.error("请填写打赏人昵称");
-      return;
-    }
+  function onSubmit(values: GiftFormValues) {
     startTransition(async () => {
-      const res = await upsertGiftRecordAction(form);
+      const res = await upsertGiftRecordAction(values);
       if (res.ok) {
         toast.success(editing ? "已更新" : "已添加");
         setShowForm(false);
@@ -272,7 +297,7 @@ export function GiftsAdminClient({
       {/* 筛选 */}
       <Card className="mb-4 p-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div>
-          <Label className="text-xs">陪玩</Label>
+          <FormLabel className="text-xs">陪玩</FormLabel>
           <PlayerCombobox
             className="mt-1"
             players={players}
@@ -282,22 +307,21 @@ export function GiftsAdminClient({
           />
         </div>
         <div>
-          <Label className="text-xs">档位</Label>
-          <select
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            value={filter.tier}
-            onChange={(e) => setParam("tier", e.target.value)}
-          >
-            <option value="">全部</option>
-            {GIFT_TIER_CENTS.map((t) => (
-              <option key={t} value={t}>
-                {GIFT_TIER_LABELS[t]} 元
-              </option>
-            ))}
-          </select>
+          <FormLabel className="text-xs">档位</FormLabel>
+          <Select value={filter.tier} onValueChange={(v) => setParam("tier", v === "all" ? "" : v)}>
+            <SelectTrigger className="mt-1"><SelectValue placeholder="全部" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部</SelectItem>
+              {GIFT_TIER_CENTS.map((t) => (
+                <SelectItem key={t} value={String(t)}>
+                  {GIFT_TIER_LABELS[t]} 元
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
-          <Label className="text-xs">开始日期</Label>
+          <FormLabel className="text-xs">开始日期</FormLabel>
           <Input
             type="date"
             className="mt-1"
@@ -306,7 +330,7 @@ export function GiftsAdminClient({
           />
         </div>
         <div>
-          <Label className="text-xs">结束日期</Label>
+          <FormLabel className="text-xs">结束日期</FormLabel>
           <Input
             type="date"
             className="mt-1"
@@ -435,7 +459,7 @@ export function GiftsAdminClient({
         filter={filter}
       />
 
-      {/* 支付弹窗 — 复用陪玩收款码 */}
+      {/* 支付弹窗 */}
       {payTarget && (
         <PayDialog
           record={payTarget}
@@ -451,100 +475,125 @@ export function GiftsAdminClient({
           <DialogHeader>
             <DialogTitle>{editing ? "编辑礼物记录" : "新增礼物记录"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>陪玩 *</Label>
-              <PlayerCombobox
-                className="mt-1"
-                players={players}
-                value={form.playerId}
-                onChange={(id) => setForm({ ...form, playerId: id })}
-                placeholder="搜索并选择陪玩…"
+          <Form {...form}>
+            <div className="space-y-4">
+              <FormField
+                control={form.control}
+                name="playerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>陪玩 *</FormLabel>
+                    <PlayerCombobox
+                      className="mt-1"
+                      players={players}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="搜索并选择陪玩…"
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <Label>礼物档位 *</Label>
-              <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {GIFT_TIER_CENTS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setForm({ ...form, giftTierCents: t })}
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                      form.giftTierCents === t
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-input hover:bg-accent"
-                    )}
-                  >
-                    {GIFT_TIER_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label>数量</Label>
-              <Input
-                type="number"
-                min={1}
-                max={999}
-                className="mt-1"
-                value={form.quantity}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    quantity: Math.max(1, Math.min(999, Number(e.target.value) || 1)),
-                  })
-                }
+              <FormField
+                control={form.control}
+                name="giftTierCents"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>礼物档位 *</FormLabel>
+                    <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                      {GIFT_TIER_CENTS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => field.onChange(t)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                            field.value === t
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-input hover:bg-accent"
+                          )}
+                        >
+                          {GIFT_TIER_LABELS[t]}
+                        </button>
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <Label>打赏人昵称 *</Label>
-              <Input
-                className="mt-1"
-                placeholder="例如:抖音用户 xxx"
-                value={form.senderNickname}
-                onChange={(e) => setForm({ ...form, senderNickname: e.target.value })}
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>数量</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={1} max={999} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <Label>备注</Label>
-              <textarea
-                className="mt-1 w-full rounded border px-3 py-2 text-sm min-h-[60px]"
-                placeholder="选填"
-                value={form.note ?? ""}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              <FormField
+                control={form.control}
+                name="senderNickname"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>打赏人昵称 *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例如:抖音用户 xxx" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <Card className="bg-muted/50 p-3 text-sm font-mono tabular-nums">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">总额</span>
-                <span>{formatYuan(preview.total)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  平台抽成 ({(DEFAULT_GIFT_FEE_RATE_BP / 100).toFixed(0)}%)
-                </span>
-                <span className="text-orange-600">
-                  − {formatYuan(preview.fee)}
-                </span>
-              </div>
-              <div className="mt-1 flex justify-between border-t pt-2 font-semibold">
-                <span>陪玩到手</span>
-                <span className="text-primary">{formatYuan(preview.earn)}</span>
-              </div>
-            </Card>
-          </div>
+              <FormField
+                control={form.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>备注</FormLabel>
+                    <FormControl>
+                      <textarea
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm min-h-[60px] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
+                        placeholder="选填"
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <Card className="bg-muted/50 p-3 text-sm font-mono tabular-nums">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">总额</span>
+                  <span>{formatYuan(preview.total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    平台抽成 ({(DEFAULT_GIFT_FEE_RATE_BP / 100).toFixed(0)}%)
+                  </span>
+                  <span className="text-orange-600">
+                    − {formatYuan(preview.fee)}
+                  </span>
+                </div>
+                <div className="mt-1 flex justify-between border-t pt-2 font-semibold">
+                  <span>陪玩到手</span>
+                  <span className="text-primary">{formatYuan(preview.earn)}</span>
+                </div>
+              </Card>
+            </div>
+          </Form>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowForm(false)}>
               取消
             </Button>
-            <Button onClick={submit} disabled={pending}>
+            <Button onClick={form.handleSubmit(onSubmit)} disabled={pending}>
               {editing ? "保存" : "添加"}
             </Button>
           </DialogFooter>
@@ -574,7 +623,7 @@ function PayDialog({
   onClose,
   onSettle,
 }: {
-  record: Record;
+  record: GiftRecord;
   pending: boolean;
   onClose: () => void;
   onSettle: (method: "WECHAT" | "ALIPAY") => void;
