@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
 import { EmptyState } from "@/components/empty-state";
@@ -89,6 +90,7 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
     playerId: myId,
   });
   const [pending, startTransition] = useTransition();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (unread.length > 0) setPopupOpen(true);
@@ -141,7 +143,6 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
   }
 
   function remove(id: string) {
-    if (!confirm("确定删除此条报单?")) return;
     startTransition(async () => {
       const res = await deleteGiftRecordAction({ id });
       if (res.ok) {
@@ -151,6 +152,7 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
         toast.error(res.error);
       }
     });
+    setConfirmDeleteId(null);
   }
 
   return (
@@ -295,7 +297,7 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
                           size="icon"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => remove(r.id)}
+                          onClick={() => setConfirmDeleteId(r.id)}
                           aria-label="删除"
                         >
                           <Trash2 className="size-4" />
@@ -445,6 +447,15 @@ export function MyGiftsClient({ records, unread, myId, tab, stats }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        onConfirm={() => confirmDeleteId && remove(confirmDeleteId)}
+        title="删除报单"
+        description="确定删除此条报单？"
+        confirmLabel="删除"
+      />
     </>
   );
 }

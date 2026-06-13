@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -132,6 +133,7 @@ export function GiftsAdminClient({
   const [editing, setEditing] = useState<Record | null>(null);
   const [form, setForm] = useState<UpsertGiftRecordInput>(EMPTY_FORM);
   const [payTarget, setPayTarget] = useState<Record | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "delete" | "unsettle"; id: string } | null>(null);
 
   const preview = useMemo(() => {
     const total = form.giftTierCents * form.quantity;
@@ -180,7 +182,6 @@ export function GiftsAdminClient({
   }
 
   function remove(id: string) {
-    if (!confirm("确定删除此条礼物记录?")) return;
     startTransition(async () => {
       const res = await deleteGiftRecordAction({ id });
       if (res.ok) {
@@ -190,6 +191,7 @@ export function GiftsAdminClient({
         toast.error(res.error);
       }
     });
+    setConfirmAction(null);
   }
 
   function doSettle(id: string, method: "WECHAT" | "ALIPAY") {
@@ -206,7 +208,6 @@ export function GiftsAdminClient({
   }
 
   function doUnsettle(id: string) {
-    if (!confirm("撤销支付? 该报单会回到待支付状态")) return;
     startTransition(async () => {
       const res = await unsettleGiftAction({ id });
       if (res.ok) {
@@ -216,6 +217,7 @@ export function GiftsAdminClient({
         toast.error(res.error);
       }
     });
+    setConfirmAction(null);
   }
 
   function setParam(key: string, value: string) {
@@ -394,7 +396,7 @@ export function GiftsAdminClient({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => doUnsettle(r.id)}
+                        onClick={() => setConfirmAction({ type: "unsettle", id: r.id })}
                         disabled={pending}
                         title="撤销支付"
                       >
@@ -413,7 +415,7 @@ export function GiftsAdminClient({
                       size="icon"
                       variant="ghost"
                       className="text-destructive"
-                      onClick={() => remove(r.id)}
+                      onClick={() => setConfirmAction({ type: "delete", id: r.id })}
                       aria-label="删除"
                     >
                       <Trash2 className="size-4" />
@@ -548,6 +550,18 @@ export function GiftsAdminClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        onConfirm={() => {
+          if (confirmAction?.type === "delete") remove(confirmAction.id);
+          if (confirmAction?.type === "unsettle") doUnsettle(confirmAction.id);
+        }}
+        title={confirmAction?.type === "delete" ? "删除礼物记录" : "撤销支付"}
+        description={confirmAction?.type === "delete" ? "确定删除此条礼物记录？" : "撤销支付？该报单会回到待支付状态。"}
+        confirmLabel={confirmAction?.type === "delete" ? "删除" : "撤销"}
+      />
     </>
   );
 }

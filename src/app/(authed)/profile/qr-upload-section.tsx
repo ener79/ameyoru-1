@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, QrCode, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   deleteQrCodeAction,
   uploadQrCodeAction,
@@ -66,6 +67,7 @@ function QrSlot({
   const [securityCode, setSecurityCode] = useState("");
   // 上传后用一个时间戳强制刷新 <img src>(同 URL 浏览器会缓存)
   const [imgVersion, setImgVersion] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -90,7 +92,7 @@ function QrSlot({
   }
 
   function handleDelete() {
-    if (!confirm("确认删除该收款码?")) return;
+    setConfirmDelete(false);
     startTransition(async () => {
       const res = await deleteQrCodeAction({ type, securityCode });
       if (!res.ok) {
@@ -169,13 +171,22 @@ function QrSlot({
             variant="outline"
             size="sm"
             className="text-destructive hover:text-destructive"
-            onClick={handleDelete}
+            onClick={() => setConfirmDelete(true)}
             disabled={pending || disabled || !securityCode.trim()}
           >
             <Trash2 />
           </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        onConfirm={handleDelete}
+        title="删除收款码"
+        description="确认删除该收款码？"
+        confirmLabel="删除"
+      />
     </div>
   );
 }

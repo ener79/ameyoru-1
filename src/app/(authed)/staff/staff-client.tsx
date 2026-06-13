@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -36,6 +37,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { avatarInitial, formatYuan } from "@/lib/format";
@@ -98,6 +100,8 @@ export function StaffClient({
   );
   const [hideInactive, setHideInactive] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [confirmResetStaff, setConfirmResetStaff] = useState<Staff | null>(null);
+  const [confirmDeleteStaff, setConfirmDeleteStaff] = useState<Staff | null>(null);
 
   const hasInactive = staff.some((s) => !s.active);
   const visibleStaff = hideInactive ? staff.filter((s) => s.active) : staff;
@@ -114,8 +118,8 @@ export function StaffClient({
     });
   }
 
-  function handleReset(s: Staff) {
-    if (!confirm(`重置 ${s.displayName} 的密码?旧密码会立即失效`)) return;
+  const handleReset = useCallback((s: Staff) => {
+    setConfirmResetStaff(null);
     startTransition(async () => {
       const res = await resetUserPasswordAction({ id: s.id });
       if (!res.ok) {
@@ -130,12 +134,10 @@ export function StaffClient({
       });
       router.refresh();
     });
-  }
+  }, [router, startTransition]);
 
-  function handleDelete(s: Staff) {
-    if (!confirm(`删除 ${s.displayName}?此操作不可撤销,有业务记录的店长会自动拦截`)) {
-      return;
-    }
+  const handleDelete = useCallback((s: Staff) => {
+    setConfirmDeleteStaff(null);
     startTransition(async () => {
       const res = await deleteStaffAction({ id: s.id });
       if (!res.ok) {
@@ -145,7 +147,7 @@ export function StaffClient({
       toast.success(`已删除 ${s.displayName}`);
       router.refresh();
     });
-  }
+  }, [router, startTransition]);
 
   return (
     <>
@@ -157,11 +159,9 @@ export function StaffClient({
           </span>
           {hasInactive && (
             <label className="flex cursor-pointer items-center gap-1.5 select-none">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={hideInactive}
-                onChange={(e) => setHideInactive(e.target.checked)}
-                className="size-4 rounded border-input accent-primary"
+                onCheckedChange={(v) => setHideInactive(!!v)}
               />
               <span>隐藏已停用</span>
             </label>
@@ -238,7 +238,7 @@ export function StaffClient({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuItem
-                        onClick={() => handleReset(s)}
+                        onClick={() => setConfirmResetStaff(s)}
                         disabled={pending}
                       >
                         <RotateCw /> 重置密码
@@ -259,7 +259,7 @@ export function StaffClient({
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
-                        onClick={() => handleDelete(s)}
+                        onClick={() => setConfirmDeleteStaff(s)}
                         disabled={pending}
                       >
                         <Trash2 /> 删除账号
@@ -289,6 +289,24 @@ export function StaffClient({
         onClose={() => setCredentialDialog(null)}
       />
       <InviteLinkDialog link={inviteLink} onClose={() => setInviteLink("")} />
+
+      <ConfirmDialog
+        open={!!confirmResetStaff}
+        onOpenChange={(open) => { if (!open) setConfirmResetStaff(null); }}
+        onConfirm={() => confirmResetStaff && handleReset(confirmResetStaff)}
+        title="重置密码"
+        description={`重置 ${confirmResetStaff?.displayName} 的密码?旧密码会立即失效`}
+        confirmLabel="重置"
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteStaff}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteStaff(null); }}
+        onConfirm={() => confirmDeleteStaff && handleDelete(confirmDeleteStaff)}
+        title="删除账号"
+        description={`删除 ${confirmDeleteStaff?.displayName}?此操作不可撤销,有业务记录的店长会自动拦截`}
+        confirmLabel="删除"
+      />
     </>
   );
 }

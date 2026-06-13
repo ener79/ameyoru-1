@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -249,11 +250,10 @@ export function OrderForm({
             )}
             {isManager && selectedCustomer && (
               <label className="mt-3 flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 size-4 accent-primary"
+                <Checkbox
+                  className="mt-0.5"
                   checked={usePrepay}
-                  onChange={(e) => setUsePrepay(e.target.checked)}
+                  onCheckedChange={(v) => setUsePrepay(!!v)}
                   disabled={selectedCustomer.balanceCents <= 0}
                 />
                 <span className="min-w-0 flex-1">

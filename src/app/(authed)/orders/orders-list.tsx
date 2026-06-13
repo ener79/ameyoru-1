@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import {
   OrderStatusBadge,
@@ -362,6 +363,7 @@ function OrderDetailSheet({
   const [pending, startTransition] = useTransition();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [confirmUnsettle, setConfirmUnsettle] = useState(false);
 
   const canManage = role === "BOSS" || role === "STAFF";
 
@@ -636,13 +638,7 @@ function OrderDetailSheet({
                     "已标记为已结"
                   )
                 }
-                onUnsettle={() => {
-                  if (!confirm("撤销结算?该订单会回到待结算状态")) return;
-                  run(
-                    () => unsettleOrderAction({ id: order.id }),
-                    "已撤销"
-                  );
-                }}
+                onUnsettle={() => setConfirmUnsettle(true)}
               />
             </>
           )}
@@ -680,6 +676,18 @@ function OrderDetailSheet({
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmUnsettle}
+        onOpenChange={(open) => { if (!open) setConfirmUnsettle(false); }}
+        onConfirm={() => {
+          setConfirmUnsettle(false);
+          if (order) run(() => unsettleOrderAction({ id: order.id }), "已撤销");
+        }}
+        title="撤销结算"
+        description="撤销结算？该订单会回到待结算状态。"
+        confirmLabel="撤销"
+      />
     </>
   );
 }

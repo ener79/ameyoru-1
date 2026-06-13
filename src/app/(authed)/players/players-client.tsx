@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -36,6 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { avatarInitial, centsToYuanString, formatYuan } from "@/lib/format";
 import {
@@ -98,6 +99,7 @@ export function PlayersClient({
     null
   );
   const [pending, startTransition] = useTransition();
+  const [confirmResetPlayer, setConfirmResetPlayer] = useState<Player | null>(null);
 
   const filteredPlayers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -134,8 +136,8 @@ export function PlayersClient({
     });
   }
 
-  function handleReset(p: Player) {
-    if (!confirm(`重置 ${p.displayName} 的密码?旧密码会立即失效`)) return;
+  const handleReset = useCallback((p: Player) => {
+    setConfirmResetPlayer(null);
     startTransition(async () => {
       const res = await resetUserPasswordAction({ id: p.id });
       if (!res.ok) {
@@ -150,7 +152,7 @@ export function PlayersClient({
       });
       router.refresh();
     });
-  }
+  }, [router, startTransition]);
 
   function handleDeposit(p: Player) {
     startTransition(async () => {
@@ -219,7 +221,7 @@ export function PlayersClient({
             pending={pending}
             onEdit={setEditingPlayer}
             onResetSecurityCode={setSecurityCodePlayer}
-            onReset={handleReset}
+            onReset={setConfirmResetPlayer}
             onToggle={handleToggle}
             onDeposit={handleDeposit}
           />
@@ -231,7 +233,7 @@ export function PlayersClient({
             pending={pending}
             onEdit={setEditingPlayer}
             onResetSecurityCode={setSecurityCodePlayer}
-            onReset={handleReset}
+            onReset={setConfirmResetPlayer}
             onToggle={handleToggle}
             onDeposit={handleDeposit}
           />
@@ -244,7 +246,7 @@ export function PlayersClient({
               pending={pending}
               onEdit={setEditingPlayer}
               onResetSecurityCode={setSecurityCodePlayer}
-              onReset={handleReset}
+              onReset={setConfirmResetPlayer}
               onToggle={handleToggle}
               onDeposit={handleDeposit}
             />
@@ -273,6 +275,15 @@ export function PlayersClient({
       <CredentialDialog
         info={credentialDialog}
         onClose={() => setCredentialDialog(null)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmResetPlayer}
+        onOpenChange={(open) => { if (!open) setConfirmResetPlayer(null); }}
+        onConfirm={() => confirmResetPlayer && handleReset(confirmResetPlayer)}
+        title="重置密码"
+        description={`重置 ${confirmResetPlayer?.displayName} 的密码?旧密码会立即失效`}
+        confirmLabel="重置"
       />
     </>
   );

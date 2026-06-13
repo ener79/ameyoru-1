@@ -7,11 +7,15 @@ import { Plus, Megaphone, PartyPopper, Trash2, ToggleLeft, ToggleRight, Pencil }
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { formatDate } from "@/lib/format";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { upsertAnnouncementAction, toggleAnnouncementAction, deleteAnnouncementAction } from "@/server/actions/announcements";
 import type { UpsertAnnouncementInput } from "@/server/actions/announcements";
@@ -53,6 +57,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
     type: "NOTICE", title: "", content: "", contentJson: null, contentHtml: null, isPermanent: false, startAt: null, endAt: null, sortOrder: 0,
   });
   const [editorJson, setEditorJson] = useState<JSONContent | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   function openNew() {
     setEditItem(null);
@@ -89,12 +94,12 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
   }
 
   function remove(id: string) {
-    if (!confirm("确定删除？")) return;
     startTransition(async () => {
       await deleteAnnouncementAction({ id });
       toast.success("已删除");
       router.refresh();
     });
+    setConfirmDeleteId(null);
   }
 
   return (
@@ -121,8 +126,8 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
                 {item.content && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{item.content}</p>}
                 <div className="text-xs text-muted-foreground mt-1">
                   排序: {item.sortOrder}
-                  {item.startAt && <> · 开始: {new Date(item.startAt).toLocaleDateString()}</>}
-                  {item.endAt && <> · 结束: {new Date(item.endAt).toLocaleDateString()}</>}
+                  {item.startAt && <> · 开始: {formatDate(new Date(item.startAt))}</>}
+                  {item.endAt && <> · 结束: {formatDate(new Date(item.endAt))}</>}
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
@@ -130,7 +135,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
                 <Button size="icon" variant="ghost" onClick={() => toggle(item.id, !item.enabled)}>
                   {item.enabled ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}
                 </Button>
-                <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(item.id)}><Trash2 className="size-4" /></Button>
+                <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setConfirmDeleteId(item.id)}><Trash2 className="size-4" /></Button>
               </div>
             </Card>
           ))}
@@ -143,10 +148,13 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
           <div className="space-y-4">
             <div>
               <Label>类型</Label>
-              <select className="w-full border rounded px-3 py-2 text-sm mt-1" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as "NOTICE" | "ACTIVITY" })}>
-                <option value="NOTICE">公告</option>
-                <option value="ACTIVITY">活动</option>
-              </select>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as "NOTICE" | "ACTIVITY" })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NOTICE">公告</SelectItem>
+                  <SelectItem value="ACTIVITY">活动</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div><Label>标题</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div>
@@ -167,7 +175,7 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <input type="checkbox" id="perm" checked={form.isPermanent ?? false} onChange={(e) => setForm({ ...form, isPermanent: e.target.checked })} />
+              <Checkbox id="perm" checked={form.isPermanent ?? false} onCheckedChange={(v) => setForm({ ...form, isPermanent: !!v })} />
               <Label htmlFor="perm">长期有效</Label>
             </div>
             {!form.isPermanent && (
@@ -181,6 +189,15 @@ export function AnnouncementsClient({ items }: { items: Item[] }) {
           <DialogFooter><Button onClick={submit} disabled={pending}>{editItem ? "保存" : "创建"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        onConfirm={() => confirmDeleteId && remove(confirmDeleteId)}
+        title="删除公告"
+        description="确定删除该公告？此操作无法撤销。"
+        confirmLabel="删除"
+      />
     </>
   );
 }

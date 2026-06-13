@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Lock, User } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { InputWithIcon } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -62,11 +63,9 @@ export function LoginForm() {
       </div>
 
       <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground select-none">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={rememberMe}
-          onChange={(e) => setRememberMe(e.target.checked)}
-          className="size-4 rounded border-input accent-primary"
+          onCheckedChange={(v) => setRememberMe(!!v)}
         />
         <span>30 天内免登录</span>
       </label>
