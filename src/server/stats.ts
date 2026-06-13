@@ -383,27 +383,28 @@ export async function recentOrders(opts: { playerId?: string; limit?: number }) 
 }
 
 export async function dailyRevenue(days: number): Promise<{ date: string; cents: number }[]> {
+  const { from } = rangeOf("today");
+  const rangeFrom = new Date(from.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
   const now = new Date();
-  const from = new Date(now);
-  from.setDate(from.getDate() - days + 1);
-  from.setHours(0, 0, 0, 0);
 
+  const shDate = sql`DATE(CONVERT_TZ(${order.startAt}, '+00:00', '+08:00'))`;
   const rows = await db
     .select({
-      d: sql<string>`DATE(${order.startAt})`,
+      d: sql<string>`${shDate}`,
       s: sum(order.payableCents).mapWith(Number),
     })
     .from(order)
-    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, from), lte(order.startAt, now)))
-    .groupBy(sql`DATE(${order.startAt})`)
-    .orderBy(sql`DATE(${order.startAt})`);
+    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, rangeFrom), lte(order.startAt, now)))
+    .groupBy(shDate)
+    .orderBy(shDate);
 
   const map = new Map(rows.map((r) => [r.d, r.s ?? 0]));
 
-  // Fill in all days (including zero-revenue days)
+  const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const shNow = new Date(now.getTime() + now.getTimezoneOffset() * 60_000 + SHANGHAI_OFFSET_MS);
   const results: { date: string; cents: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
+    const d = new Date(shNow);
     d.setDate(d.getDate() - i);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     results.push({ date: `${d.getMonth() + 1}/${d.getDate()}`, cents: map.get(key) ?? 0 });
@@ -412,18 +413,12 @@ export async function dailyRevenue(days: number): Promise<{ date: string; cents:
 }
 
 export async function weekOverWeekRevenue(): Promise<{ thisWeek: number; lastWeek: number }> {
-  const now = new Date();
-  const dayOfWeek = now.getDay() || 7;
-  const thisMonday = new Date(now);
-  thisMonday.setDate(now.getDate() - dayOfWeek + 1);
-  thisMonday.setHours(0, 0, 0, 0);
-  const lastMonday = new Date(thisMonday);
-  lastMonday.setDate(thisMonday.getDate() - 7);
-  const lastSunday = new Date(thisMonday);
-  lastSunday.setMilliseconds(-1);
+  const { from: thisMonday, to: thisSunday } = rangeOf("week");
+  const lastMonday = new Date(thisMonday.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const lastSunday = new Date(thisMonday.getTime() - 1);
 
   const [thisW] = await db.select({ s: sum(order.payableCents).mapWith(Number) }).from(order)
-    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, thisMonday), lte(order.startAt, now)));
+    .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, thisMonday), lte(order.startAt, thisSunday)));
   const [lastW] = await db.select({ s: sum(order.payableCents).mapWith(Number) }).from(order)
     .where(and(eq(order.orderStatus, "COMPLETED"), gte(order.startAt, lastMonday), lte(order.startAt, lastSunday)));
 
