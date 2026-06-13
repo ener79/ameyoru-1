@@ -84,7 +84,7 @@
   --success: oklch(0.72 0.17 162);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.80 0.17 70);
-  --warning-foreground: oklch(0.145 0 0);
+  --warning-foreground: oklch(0.985 0 0);
 
   --rank-gold-from: oklch(0.78 0.13 88);
   --rank-gold-to: oklch(0.65 0.15 75);
