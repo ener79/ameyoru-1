@@ -535,21 +535,27 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   return { ok: true as const };
 }
 
-export async function settleOrderAction(input: {
-  id: string;
-  paidMethod?: "WECHAT" | "ALIPAY";
-}) {
+const settleSchema = z.object({
+  id: z.string().min(1),
+  paidMethod: z.enum(["WECHAT", "ALIPAY"]).optional(),
+});
+
+export async function settleOrderAction(input: z.input<typeof settleSchema>) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const parsed = settleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.errors[0]?.message ?? "参数错误" };
+  }
   const result = await db
     .update(order)
     .set({
       settleStatus: "SETTLED",
       settledAt: new Date(),
-      paidMethod: input.paidMethod ?? null,
+      paidMethod: parsed.data.paidMethod ?? null,
     })
     .where(
       and(
-        eq(order.id, input.id),
+        eq(order.id, parsed.data.id),
         eq(order.settleStatus, "UNSETTLED"),
         settlableOrderCondition()
       )
@@ -562,7 +568,7 @@ export async function settleOrderAction(input: {
         playerCompensationCents: order.playerCompensationCents,
       })
       .from(order)
-      .where(eq(order.id, input.id))
+      .where(eq(order.id, parsed.data.id))
       .limit(1);
     if (!current) return { ok: false as const, error: "订单不存在" };
     if (current.settleStatus === "SETTLED") {
@@ -586,10 +592,10 @@ export async function settleOrderAction(input: {
     })
     .from(order)
     .innerJoin(user, eq(user.id, order.playerId))
-    .where(eq(order.id, input.id))
+    .where(eq(order.id, parsed.data.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
-  invalidatePages(input.id);
+  invalidatePages(parsed.data.id);
 
   // 取消单结算时金额是补偿,完成单是应得
   const amount =
@@ -599,9 +605,9 @@ export async function settleOrderAction(input: {
   notifyOrderSettled({
     actorName: me.name,
     playerEarnCents: amount,
-    paidMethod: input.paidMethod,
+    paidMethod: parsed.data.paidMethod,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: input.id, detail: { playerName: target.playerName, amount, paidMethod: input.paidMethod } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: parsed.data.id, detail: { playerName: target.playerName, amount, paidMethod: parsed.data.paidMethod } });
 
   return { ok: true as const };
 }

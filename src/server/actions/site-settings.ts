@@ -24,7 +24,7 @@ const updateSchema = z.object({
   footerText: z.string().max(500).optional().nullable().transform((s) => s?.trim() || null),
   themePreset: z.enum(PRESET_KEYS),
   customThemeCSS: z.string().max(10240).optional().nullable().transform((s) => s?.trim() || null),
-  borderRadius: z.string().max(10).optional().nullable().transform((s) => s?.trim() || null),
+  borderRadius: z.string().max(10).regex(/^\d+(\.\d+)?(px|rem|em|%)$/, "圆角格式不合法").optional().nullable().transform((s) => s?.trim() || null),
   unsettledWarnDays: z.coerce.number().int().min(1).max(90).default(5),
 });
 

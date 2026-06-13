@@ -241,26 +241,32 @@ export async function deleteGiftRecordAction(input: { id: string }) {
   return { ok: true as const };
 }
 
+const settleGiftSchema = z.object({
+  id: z.string().min(1),
+  paidMethod: z.enum(["WECHAT", "ALIPAY"]).optional(),
+});
+
 /** 后台:标记礼物报单为已支付 */
-export async function settleGiftAction(input: {
-  id: string;
-  paidMethod?: "WECHAT" | "ALIPAY";
-}) {
+export async function settleGiftAction(input: z.input<typeof settleGiftSchema>) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const parsed = settleGiftSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.errors[0]?.message ?? "参数错误" };
+  }
   const result = await db
     .update(giftRecord)
     .set({
       settleStatus: "SETTLED",
       settledAt: new Date(),
-      paidMethod: input.paidMethod ?? null,
+      paidMethod: parsed.data.paidMethod ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(giftRecord.id, input.id), eq(giftRecord.settleStatus, "UNSETTLED")));
+    .where(and(eq(giftRecord.id, parsed.data.id), eq(giftRecord.settleStatus, "UNSETTLED")));
   if (getAffectedRows(result) !== 1) {
     const [current] = await db
       .select({ settleStatus: giftRecord.settleStatus })
       .from(giftRecord)
-      .where(eq(giftRecord.id, input.id))
+      .where(eq(giftRecord.id, parsed.data.id))
       .limit(1);
     if (!current) return { ok: false as const, error: "记录不存在" };
     if (current.settleStatus === "SETTLED") {
@@ -272,7 +278,7 @@ export async function settleGiftAction(input: {
   const [target] = await db
     .select({ playerEarnCents: giftRecord.playerEarnCents })
     .from(giftRecord)
-    .where(eq(giftRecord.id, input.id))
+    .where(eq(giftRecord.id, parsed.data.id))
     .limit(1);
 
   logAudit({
@@ -280,8 +286,8 @@ export async function settleGiftAction(input: {
     actorName: me.name,
     action: "SETTLE_GIFT",
     targetType: "gift_record",
-    targetId: input.id,
-    detail: { amount: target?.playerEarnCents, paidMethod: input.paidMethod },
+    targetId: parsed.data.id,
+    detail: { amount: target?.playerEarnCents, paidMethod: parsed.data.paidMethod },
   });
 
   invalidate();

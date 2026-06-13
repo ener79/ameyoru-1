@@ -8,7 +8,7 @@ import { announcement } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { nanoid } from "../id";
 import { logAudit } from "@/server/audit";
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify, { type Config } from "isomorphic-dompurify";
 
 const upsertSchema = z.object({
   id: z.string().optional(),
@@ -25,17 +25,27 @@ const upsertSchema = z.object({
 
 export type UpsertAnnouncementInput = z.input<typeof upsertSchema>;
 
+const SANITIZE_CONFIG: Config = {
+  ALLOWED_TAGS: [
+    "p", "br", "strong", "em", "u", "s",
+    "h1", "h2", "h3",
+    "ul", "ol", "li",
+    "blockquote", "pre", "code",
+    "a", "img",
+  ],
+  ALLOWED_ATTR: ["href", "src", "alt", "target", "rel", "class"],
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+  FORCE_BODY: true,
+};
+
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A") {
+    node.setAttribute("rel", "noopener noreferrer");
+  }
+});
+
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      "p", "br", "strong", "em", "u", "s",
-      "h1", "h2", "h3",
-      "ul", "ol", "li",
-      "blockquote", "pre", "code",
-      "a", "img",
-    ],
-    ALLOWED_ATTR: ["href", "src", "alt", "target", "rel", "class"],
-  });
+  return DOMPurify.sanitize(html, SANITIZE_CONFIG) as string;
 }
 
 function invalidate() {
