@@ -15,7 +15,7 @@ import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
 import { MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { customerSummary } from "@/server/stats";
-import { formatYuan, yuanStringToCents } from "@/lib/format";
+import { yuanStringToCents } from "@/lib/format";
 import { nanoid } from "../id";
 
 const optionalTrimmed = (max: number) =>
