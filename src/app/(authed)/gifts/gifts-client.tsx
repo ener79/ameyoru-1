@@ -30,6 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
@@ -297,7 +298,7 @@ export function GiftsAdminClient({
       {/* 筛选 */}
       <Card className="mb-4 p-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div>
-          <FormLabel className="text-xs">陪玩</FormLabel>
+          <Label className="text-xs">陪玩</Label>
           <PlayerCombobox
             className="mt-1"
             players={players}
@@ -307,7 +308,7 @@ export function GiftsAdminClient({
           />
         </div>
         <div>
-          <FormLabel className="text-xs">档位</FormLabel>
+          <Label className="text-xs">档位</Label>
           <Select value={filter.tier} onValueChange={(v) => setParam("tier", v === "all" ? "" : v)}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="全部" /></SelectTrigger>
             <SelectContent>
@@ -321,7 +322,7 @@ export function GiftsAdminClient({
           </Select>
         </div>
         <div>
-          <FormLabel className="text-xs">开始日期</FormLabel>
+          <Label className="text-xs">开始日期</Label>
           <Input
             type="date"
             className="mt-1"
@@ -330,7 +331,7 @@ export function GiftsAdminClient({
           />
         </div>
         <div>
-          <FormLabel className="text-xs">结束日期</FormLabel>
+          <Label className="text-xs">结束日期</Label>
           <Input
             type="date"
             className="mt-1"
