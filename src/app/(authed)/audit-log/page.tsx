@@ -1,14 +1,17 @@
 import { requireSession } from "@/lib/auth-helpers";
 import { db } from "@/db";
 import { auditLog } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { Pagination } from "@/components/pagination";
 import { ClipboardList } from "lucide-react";
 import { formatDuration, formatRelativeDateTime, formatYuan } from "@/lib/format";
 import { AuditFilterBar } from "./audit-filter-bar";
+
+const PAGE_SIZE = 50;
 
 type BadgeVariant =
   | "default"
@@ -122,13 +125,14 @@ function formatDetailValue(key: string, value: unknown): string {
 export default async function AuditLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ actor?: string; action?: string }>;
+  searchParams: Promise<{ actor?: string; action?: string; page?: string }>;
 }) {
   await requireSession({ role: ["BOSS"] });
 
   const params = await searchParams;
   const actor = params.actor?.trim() ?? "";
   const action = params.action?.trim() ?? "";
+  const page = Math.max(1, parseInt(params.page ?? "1") || 1);
 
   // 操作人下拉:按最近活跃排序,同一 actorId 取最新用过的名字去重
   const actorRows = await db
@@ -161,22 +165,35 @@ export default async function AuditLogPage({
   if (action) conditions.push(eq(auditLog.action, action));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  const [countResult] = await db
+    .select({ count: count() })
+    .from(auditLog)
+    .where(where);
+  const total = countResult?.count ?? 0;
+
   const logs = await db
     .select()
     .from(auditLog)
     .where(where)
     .orderBy(desc(auditLog.createdAt))
-    .limit(300);
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
 
   const hasFilter = !!actor || !!action;
   const tableEmpty = actorOptions.length === 0;
+
+  const baseParams = new URLSearchParams();
+  if (actor) baseParams.set("actor", actor);
+  if (action) baseParams.set("action", action);
+  const baseQs = baseParams.toString();
+  const baseHref = baseQs ? `/audit-log?${baseQs}` : "/audit-log";
 
   return (
     <>
       <PageHeader
         title="操作日志"
         description={
-          hasFilter ? `筛选结果 · ${logs.length} 条` : "最近 300 条操作记录"
+          hasFilter ? `筛选结果 · 共 ${total} 条` : `共 ${total} 条操作记录`
         }
       />
       {tableEmpty ? (
@@ -225,6 +242,12 @@ export default async function AuditLogPage({
               </ul>
             </Card>
           )}
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            baseHref={baseHref}
+          />
         </>
       )}
     </>
