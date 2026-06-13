@@ -32,7 +32,6 @@ const staffNav: NavItem[] = [
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },
-  { href: "/site-settings", label: "站点设置" },
 ];
 
 const playerNav: NavItem[] = [

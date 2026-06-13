@@ -43,6 +43,18 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
+  // qr/ prefix: only the owner or managers can view
+  if (path[0] === "qr" && path.length === 2) {
+    const role = (session.user as { role?: string }).role;
+    const isManager = role === "BOSS" || role === "STAFF";
+    if (!isManager) {
+      const ownerPrefix = `${session.user.id}-`;
+      if (!path[1].startsWith(ownerPrefix)) {
+        return new Response("Forbidden", { status: 403 });
+      }
+    }
+  }
+
   const ext = extname(fullPath).slice(1);
   const contentType = contentTypeForImageExt(ext);
   if (!contentType) {

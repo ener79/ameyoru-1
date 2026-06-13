@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { SiteSettingsForm } from "./site-settings-form";
 
 export default async function SiteSettingsPage() {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  await requireSession({ role: "BOSS" });
   const settings = await getSiteSettings();
 
   return (

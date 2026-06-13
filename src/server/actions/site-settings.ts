@@ -29,7 +29,7 @@ const updateSchema = z.object({
 });
 
 export async function updateSiteSettingsAction(formData: FormData) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: "BOSS" });
 
   const raw = {
     siteName: String(formData.get("siteName") ?? ""),

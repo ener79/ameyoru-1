@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { user, account, playerInvite } from "@/db/schema";
+import { user, account, playerInvite, session } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/auth-helpers";
 import { readImageUpload, type ImageUpload } from "@/lib/image-upload";
@@ -301,6 +301,9 @@ export async function toggleUserActiveAction(input: {
     .update(user)
     .set({ active: input.active })
     .where(eq(user.id, input.id));
+  if (!input.active) {
+    await db.delete(session).where(eq(session.userId, input.id));
+  }
   logAudit({ actorId: me.id, actorName: me.name, action: input.active ? "ENABLE_USER" : "DISABLE_USER", targetType: "user", targetId: input.id, detail: { userName: target.name, username: target.username } });
   revalidatePath("/players");
   revalidatePath("/staff");
@@ -535,7 +538,10 @@ export async function completePlayerInviteAction(
 
 export async function toggleDepositAction(input: { id: string; depositPaid: boolean }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  const [target] = await db.select({ name: user.name, username: user.username }).from(user).where(eq(user.id, input.id)).limit(1);
+  const [target] = await db.select({ name: user.name, username: user.username, role: user.role }).from(user).where(eq(user.id, input.id)).limit(1);
+  if (!target || target.role !== "PLAYER") {
+    return { ok: false as const, error: "只能操作陪玩的押金状态" };
+  }
   await db.update(user).set({ depositPaid: input.depositPaid }).where(eq(user.id, input.id));
   logAudit({ actorId: me.id, actorName: me.name, action: input.depositPaid ? "MARK_DEPOSIT_PAID" : "MARK_DEPOSIT_UNPAID", targetType: "user", targetId: input.id, detail: target ? { userName: target.name, username: target.username } : undefined });
   revalidatePath("/players");
