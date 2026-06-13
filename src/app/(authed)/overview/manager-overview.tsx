@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusGroup } from "@/components/order-status-badge";
 import { RankBadge } from "@/components/rank-badge";
+import { DailyChart } from "./daily-chart";
 import { leaderboard, recentOrders, shopSummary, dailyRevenue, weekOverWeekRevenue, overdueUnsettledCount } from "@/server/stats";
 import { getSiteSettings } from "@/lib/site-settings";
 import {
@@ -91,52 +92,10 @@ export async function ManagerOverview({ userName }: { userName: string }) {
         />
       </div>
 
-      {/* 近7日收入 — 全宽，柱形图+数字+平均线+汇总 */}
+      {/* 近7日收入 — 全宽，柱形图+数字+汇总 */}
       <div className="mt-6">
         <Section title="近7日收入">
-          {(() => {
-            const max = Math.max(...daily.map(d => d.cents), 1);
-            const totalCents = daily.reduce((s, d) => s + d.cents, 0);
-            const avgCents = Math.round(totalCents / (daily.length || 1));
-            const weekdays = ["周日","周一","周二","周三","周四","周五","周六"];
-            // figure out day-of-week for each date
-            const now = new Date();
-
-            return (
-              <>
-                <div className="relative flex items-end gap-1 sm:gap-2 h-36 mt-3 overflow-x-auto min-w-0">
-
-                  {daily.map((d, i) => {
-
-                    const dayOffset = daily.length - 1 - i;
-                    const dayDate = new Date(now);
-                    dayDate.setDate(dayDate.getDate() - dayOffset);
-                    const weekday = weekdays[dayDate.getDay()];
-                    return (
-                      <div key={d.date} className="flex flex-col items-center gap-1 flex-1 min-w-[36px]">
-                        <span className="text-[10px] font-mono tabular-nums text-foreground">
-                          {d.cents > 0 ? formatYuan(d.cents) : "-"}
-                        </span>
-                        <div
-                          className={"w-full rounded-t min-h-[4px] transition-all bg-primary"}
-                          style={{ height: `${Math.max(4, Math.round((d.cents / max) * 110))}px` }}
-                        />
-                        <div className="text-center">
-                          <div className="text-[9px] text-muted-foreground">{weekday}</div>
-                          <div className="text-[10px] text-muted-foreground">{d.date}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground border-t pt-2">
-                  <span>本周合计 <span className="font-mono font-semibold text-foreground">{formatYuan(totalCents)}</span></span>
-                  <span>日均 <span className="font-mono font-semibold text-foreground">{formatYuan(avgCents)}</span></span>
-                  <span>最高 <span className="font-mono font-semibold text-foreground">{formatYuan(Math.max(...daily.map(d => d.cents)))}</span></span>
-                </div>
-              </>
-            );
-          })()}
+          <DailyChart daily={daily} />
         </Section>
       </div>
 
