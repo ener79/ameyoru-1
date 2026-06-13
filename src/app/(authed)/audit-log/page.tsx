@@ -139,7 +139,6 @@ export default async function AuditLogPage({
     .select({
       actorId: auditLog.actorId,
       actorName: auditLog.actorName,
-      lastAt: sql<string>`MAX(${auditLog.createdAt})`.as("last_at"),
     })
     .from(auditLog)
     .groupBy(auditLog.actorId, auditLog.actorName)
@@ -160,7 +159,7 @@ export default async function AuditLogPage({
     .map((r) => ({ value: r.action, label: ACTION_LABEL[r.action] ?? r.action }))
     .sort((a, b) => a.label.localeCompare(b.label, "zh"));
 
-  const conditions = [];
+  const conditions: ReturnType<typeof eq>[] = [];
   if (actor) conditions.push(eq(auditLog.actorId, actor));
   if (action) conditions.push(eq(auditLog.action, action));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
