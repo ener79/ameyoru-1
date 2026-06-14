@@ -196,9 +196,23 @@ export function OrdersList({
           {canManage && <ExportCSVButton label="导出" onExport={handleExportCSV} />}
           <div className="text-xs text-muted-foreground">
             {totals.count} 单 ·{" "}
-            <span className="font-mono tabular-nums text-foreground">
-              {formatYuan(canManage ? totals.payable : totals.earn)}
-            </span>
+            {canManage ? (
+              <>
+                <span className="text-muted-foreground">实付 </span>
+                <span className="font-mono tabular-nums text-foreground">
+                  {formatYuan(totals.payable)}
+                </span>
+                {" · "}
+                <span className="text-muted-foreground">应得 </span>
+                <span className="font-mono tabular-nums text-success">
+                  {formatYuan(totals.earn)}
+                </span>
+              </>
+            ) : (
+              <span className="font-mono tabular-nums text-foreground">
+                {formatYuan(totals.earn)}
+              </span>
+            )}
           </div>
         </div>
       </div>
