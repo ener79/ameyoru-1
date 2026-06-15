@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format, isToday, isTomorrow, isYesterday } from "date-fns";
+import { isToday, isTomorrow, isYesterday, format } from "date-fns";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Tag, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import {
   PRICE_BUCKETS_CENTS,
 } from "@/lib/constants";
 import { createOrderAction } from "@/server/actions/orders";
+import { DatePicker } from "@/components/date-picker";
+import { TimeSelect, type TimeValue } from "@/components/time-select";
 import type { PlayerGender } from "@/db/schema";
 
 interface Customer {
@@ -61,14 +63,17 @@ export function OrderForm({
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerWechat, setCustomerWechat] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
-  useEffect(() => {
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    setStartAt(format(oneHourAgo, "yyyy-MM-dd'T'HH:mm"));
-    setEndAt(format(now, "yyyy-MM-dd'T'HH:mm"));
-  }, []);
+
+  const now = new Date();
+  const [sessionDate, setSessionDate] = useState<Date>(now);
+  const [startTime, setStartTime] = useState<TimeValue>({
+    hour: (now.getHours() + 23) % 24,
+    minute: now.getMinutes(),
+  });
+  const [endTime, setEndTime] = useState<TimeValue>({
+    hour: now.getHours(),
+    minute: now.getMinutes(),
+  });
   // 陪玩自报:单价锁定为老板设的 defaultRateCents,不可修改
   const [rate, setRate] = useState(
     !isManager && players[0]?.defaultRateCents
@@ -86,17 +91,25 @@ export function OrderForm({
     setRate(p?.defaultRateCents != null ? centsToYuanString(p.defaultRateCents) : "");
   }
 
+  const startAt = useMemo(() => {
+    const d = new Date(sessionDate);
+    d.setHours(startTime.hour, startTime.minute, 0, 0);
+    return d;
+  }, [sessionDate, startTime]);
+
+  const endAt = useMemo(() => {
+    const d = new Date(sessionDate);
+    d.setHours(endTime.hour, endTime.minute, 0, 0);
+    return d;
+  }, [sessionDate, endTime]);
+
   const computed = useMemo(() => {
-    if (!startAt || !endAt) return null;
-    const s = new Date(startAt);
-    const e = new Date(endAt);
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
     const rateCents = yuanStringToCents(rate);
     if (rateCents <= 0) return null;
     const discountCents = discount ? yuanStringToCents(discount) : 0;
     const r = computeOrder({
-      startAt: s,
-      endAt: e,
+      startAt,
+      endAt,
       hourlyRateCents: rateCents,
       discountCents,
       commissionPerHourCents: DEFAULT_COMMISSION_PER_HOUR_CENTS,
@@ -106,18 +119,15 @@ export function OrderForm({
   }, [startAt, endAt, rate, discount]);
 
   const crossDay = useMemo(() => {
-    if (!startAt || !endAt) return false;
-    return new Date(endAt).getTime() < new Date(startAt).getTime();
-  }, [startAt, endAt]);
+    return endTime.hour * 60 + endTime.minute < startTime.hour * 60 + startTime.minute;
+  }, [startTime, endTime]);
 
   const dateWarning = useMemo(() => {
-    if (!startAt) return null;
-    const d = new Date(startAt);
-    if (isNaN(d.getTime()) || isToday(d)) return null;
-    if (isTomorrow(d)) return "开始时间是明天,请确认日期是否正确";
-    if (isYesterday(d)) return "开始时间是昨天,请确认日期是否正确";
-    return `开始时间不是今天(${format(d, "M月d日")}),请确认日期是否正确`;
-  }, [startAt]);
+    if (isToday(sessionDate)) return null;
+    if (isTomorrow(sessionDate)) return "日期是明天,请确认是否正确";
+    if (isYesterday(sessionDate)) return "日期是昨天,请确认是否正确";
+    return `日期不是今天(${format(sessionDate, "M月d日")}),请确认是否正确`;
+  }, [sessionDate]);
 
   const hasDiscount = !!(computed && computed.discountCents > 0);
   const isLoss = !!(computed && computed.shopProfitCents < 0);
@@ -154,8 +164,6 @@ export function OrderForm({
         ? selectedCustomer
         : null;
     startTransition(async () => {
-      // datetime-local 无时区,客户端先按本地时区算出 UTC ISO,
-      // 服务端 new Date() 解析 Z 后缀就 TZ 无关了(prod UTC 容器原本会偏 8 小时)。
       const res = await createOrderAction({
         playerId: isManager ? playerId : undefined,
         customerId: matchedCustomer?.id,
@@ -163,8 +171,8 @@ export function OrderForm({
         customerWechat: matchedCustomer
           ? undefined
           : customerWechat.trim() || undefined,
-        startAt: new Date(startAt).toISOString(),
-        endAt: new Date(endAt).toISOString(),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         hourlyRateYuan: rate,
         discountYuan: isManager && discount ? discount : undefined,
         usePrepay: isManager ? usePrepay : undefined,
@@ -279,19 +287,18 @@ export function OrderForm({
             )}
           </div>
 
+          <div className="space-y-2">
+            <Label>日期</Label>
+            <DatePicker value={sessionDate} onChange={setSessionDate} />
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="start">开始时间</Label>
-              <Input
-                id="start"
-                type="datetime-local"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
-                required
-              />
+              <Label>开始时间</Label>
+              <TimeSelect value={startTime} onChange={setStartTime} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="end">
+              <Label>
                 结束时间
                 {crossDay && (
                   <Badge variant="warning" className="ml-1.5">
@@ -299,15 +306,19 @@ export function OrderForm({
                   </Badge>
                 )}
               </Label>
-              <Input
-                id="end"
-                type="datetime-local"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-                required
-              />
+              <TimeSelect value={endTime} onChange={setEndTime} />
             </div>
           </div>
+          {computed && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <span>{formatDuration(computed.durationMin)}</span>
+              {" · "}
+              <span className="font-mono tabular-nums text-success">
+                {formatYuan(computed.playerEarnCents)}
+              </span>
+              <span>应得</span>
+            </div>
+          )}
           {dateWarning && (
             <div className="flex items-center gap-2 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
               <TriangleAlert className="size-4 shrink-0" />
