@@ -161,6 +161,14 @@ export async function createOrderAction(input: CreateOrderInput) {
     return { ok: false as const, error: "时间格式无效" };
   }
 
+  // 陪玩自报:开始时间不能超过当前时间 2 小时(防止误选明天)
+  if (me.role === "PLAYER") {
+    const maxFutureMs = 2 * 60 * 60 * 1000;
+    if (startAt.getTime() > Date.now() + maxFutureMs) {
+      return { ok: false as const, error: "开始时间异常,请检查日期是否选到了明天" };
+    }
+  }
+
   // 陪玩自报:单价强制使用老板设的 defaultRateCents,忽略前端传值(防篡改)
   let hourlyRateCents: number;
   if (me.role === "PLAYER") {

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Tag } from "lucide-react";
+import { ArrowRight, Loader2, Tag, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -108,6 +108,15 @@ export function OrderForm({
     if (!startAt || !endAt) return false;
     return new Date(endAt).getTime() < new Date(startAt).getTime();
   }, [startAt, endAt]);
+
+  const dateWarning = useMemo(() => {
+    if (!startAt) return null;
+    const d = new Date(startAt);
+    if (isNaN(d.getTime()) || isToday(d)) return null;
+    if (isTomorrow(d)) return "开始时间是明天,请确认日期是否正确";
+    if (isYesterday(d)) return "开始时间是昨天,请确认日期是否正确";
+    return `开始时间不是今天(${format(d, "M月d日")}),请确认日期是否正确`;
+  }, [startAt]);
 
   const hasDiscount = !!(computed && computed.discountCents > 0);
   const isLoss = !!(computed && computed.shopProfitCents < 0);
@@ -298,6 +307,12 @@ export function OrderForm({
               />
             </div>
           </div>
+          {dateWarning && (
+            <div className="flex items-center gap-2 rounded-md border border-warning bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+              <TriangleAlert className="size-4 shrink-0" />
+              {dateWarning}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

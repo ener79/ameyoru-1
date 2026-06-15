@@ -23,7 +23,7 @@ function toUTC(shanghaiDate: Date): Date {
   return new Date(shanghaiDate.getTime() - SHANGHAI_OFFSET_MS);
 }
 
-export type RangeKey = "today" | "week" | "month";
+export type RangeKey = "today" | "week" | "month" | "lastWeek" | "lastMonth";
 
 export function rangeOf(key: RangeKey, now?: Date) {
   const sh = now
@@ -52,6 +52,25 @@ export function rangeOf(key: RangeKey, now?: Date) {
       from = new Date(sh.getFullYear(), sh.getMonth(), 1);
       to = endOfDaySH(new Date(sh.getFullYear(), sh.getMonth() + 1, 0));
       break;
+    case "lastWeek": {
+      const d = sh.getDay() || 7;
+      const thisMonday = new Date(sh);
+      thisMonday.setDate(sh.getDate() - d + 1);
+      const lastMonday = new Date(thisMonday);
+      lastMonday.setDate(thisMonday.getDate() - 7);
+      const lastSunday = new Date(lastMonday);
+      lastSunday.setDate(lastMonday.getDate() + 6);
+      from = startOfDaySH(lastMonday);
+      to = endOfDaySH(lastSunday);
+      break;
+    }
+    case "lastMonth": {
+      const y = sh.getMonth() === 0 ? sh.getFullYear() - 1 : sh.getFullYear();
+      const m = sh.getMonth() === 0 ? 11 : sh.getMonth() - 1;
+      from = new Date(y, m, 1);
+      to = endOfDaySH(new Date(y, m + 1, 0));
+      break;
+    }
   }
 
   return { from: toUTC(from), to: toUTC(to) };
@@ -61,4 +80,6 @@ export const rangeLabel: Record<RangeKey, string> = {
   today: "今日",
   week: "本周",
   month: "本月",
+  lastWeek: "上周",
+  lastMonth: "上月",
 };

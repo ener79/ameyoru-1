@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { avatarInitial, formatYuan } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const ranges: RangeKey[] = ["today", "week", "month"];
+const ranges: RangeKey[] = ["today", "week", "month", "lastWeek", "lastMonth"];
 const giftRanges = ["today", "week", "month", "all"] as const;
 const giftRangeLabel: Record<(typeof giftRanges)[number], string> = {
   today: "今日",
