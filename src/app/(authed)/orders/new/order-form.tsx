@@ -64,9 +64,10 @@ export function OrderForm({
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   useEffect(() => {
-    const local = format(new Date(), "yyyy-MM-dd'T'HH:mm");
-    setStartAt(local);
-    setEndAt(local);
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    setStartAt(format(oneHourAgo, "yyyy-MM-dd'T'HH:mm"));
+    setEndAt(format(now, "yyyy-MM-dd'T'HH:mm"));
   }, []);
   // 陪玩自报:单价锁定为老板设的 defaultRateCents,不可修改
   const [rate, setRate] = useState(
