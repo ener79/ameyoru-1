@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isToday, isTomorrow, isYesterday, format } from "date-fns";
 import { toast } from "sonner";
@@ -64,16 +64,15 @@ export function OrderForm({
   const [customerName, setCustomerName] = useState("");
   const [customerWechat, setCustomerWechat] = useState("");
 
-  const now = new Date();
-  const [sessionDate, setSessionDate] = useState<Date>(now);
-  const [startTime, setStartTime] = useState<TimeValue>({
-    hour: (now.getHours() + 23) % 24,
-    minute: now.getMinutes(),
-  });
-  const [endTime, setEndTime] = useState<TimeValue>({
-    hour: now.getHours(),
-    minute: now.getMinutes(),
-  });
+  const [sessionDate, setSessionDate] = useState<Date | null>(null);
+  const [startTime, setStartTime] = useState<TimeValue | null>(null);
+  const [endTime, setEndTime] = useState<TimeValue | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    setSessionDate(now);
+    setStartTime({ hour: (now.getHours() + 23) % 24, minute: now.getMinutes() });
+    setEndTime({ hour: now.getHours(), minute: now.getMinutes() });
+  }, []);
   // 陪玩自报:单价锁定为老板设的 defaultRateCents,不可修改
   const [rate, setRate] = useState(
     !isManager && players[0]?.defaultRateCents
@@ -92,18 +91,21 @@ export function OrderForm({
   }
 
   const startAt = useMemo(() => {
+    if (!sessionDate || !startTime) return null;
     const d = new Date(sessionDate);
     d.setHours(startTime.hour, startTime.minute, 0, 0);
     return d;
   }, [sessionDate, startTime]);
 
   const endAt = useMemo(() => {
+    if (!sessionDate || !endTime) return null;
     const d = new Date(sessionDate);
     d.setHours(endTime.hour, endTime.minute, 0, 0);
     return d;
   }, [sessionDate, endTime]);
 
   const computed = useMemo(() => {
+    if (!startAt || !endAt) return null;
     const rateCents = yuanStringToCents(rate);
     if (rateCents <= 0) return null;
     const discountCents = discount ? yuanStringToCents(discount) : 0;
@@ -119,10 +121,12 @@ export function OrderForm({
   }, [startAt, endAt, rate, discount]);
 
   const crossDay = useMemo(() => {
+    if (!startTime || !endTime) return false;
     return endTime.hour * 60 + endTime.minute < startTime.hour * 60 + startTime.minute;
   }, [startTime, endTime]);
 
   const dateWarning = useMemo(() => {
+    if (!sessionDate) return null;
     if (isToday(sessionDate)) return null;
     if (isTomorrow(sessionDate)) return "日期是明天,请确认是否正确";
     if (isYesterday(sessionDate)) return "日期是昨天,请确认是否正确";
@@ -171,8 +175,8 @@ export function OrderForm({
         customerWechat: matchedCustomer
           ? undefined
           : customerWechat.trim() || undefined,
-        startAt: startAt.toISOString(),
-        endAt: endAt.toISOString(),
+        startAt: startAt!.toISOString(),
+        endAt: endAt!.toISOString(),
         hourlyRateYuan: rate,
         discountYuan: isManager && discount ? discount : undefined,
         usePrepay: isManager ? usePrepay : undefined,
@@ -287,28 +291,32 @@ export function OrderForm({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label>日期</Label>
-            <DatePicker value={sessionDate} onChange={setSessionDate} />
-          </div>
+          {sessionDate && (
+            <div className="space-y-2">
+              <Label>日期</Label>
+              <DatePicker value={sessionDate} onChange={setSessionDate} />
+            </div>
+          )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>开始时间</Label>
-              <TimeSelect value={startTime} onChange={setStartTime} />
+          {startTime && endTime && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>开始时间</Label>
+                <TimeSelect value={startTime} onChange={setStartTime} />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  结束时间
+                  {crossDay && (
+                    <Badge variant="warning" className="ml-1.5">
+                      跨零点 +1天
+                    </Badge>
+                  )}
+                </Label>
+                <TimeSelect value={endTime} onChange={setEndTime} />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>
-                结束时间
-                {crossDay && (
-                  <Badge variant="warning" className="ml-1.5">
-                    跨零点 +1天
-                  </Badge>
-                )}
-              </Label>
-              <TimeSelect value={endTime} onChange={setEndTime} />
-            </div>
-          </div>
+          )}
           {computed && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span>{formatDuration(computed.durationMin)}</span>
