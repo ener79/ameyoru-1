@@ -4,22 +4,17 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, gt, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { giftRecord, user, GIFT_TIER_CENTS } from "@/db/schema";
+import { giftRecord, giftTemplate, user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
-import { DEFAULT_GIFT_FEE_RATE_BP, GIFT_TIER_LABELS, MAX_AMOUNT_CENTS } from "@/lib/constants";
+import { DEFAULT_GIFT_FEE_RATE_BP, MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { nanoid } from "../id";
 import { logAudit } from "@/server/audit";
-
-const GIFT_TIER_SET = new Set<number>(GIFT_TIER_CENTS);
 
 const upsertSchema = z.object({
   id: z.string().optional(),
   playerId: z.string().min(1, "请选择陪玩"),
-  giftTierCents: z
-    .number()
-    .int()
-    .refine((v) => GIFT_TIER_SET.has(v), "档位不合法"),
+  giftTemplateId: z.string().min(1, "请选择礼物"),
   quantity: z.number().int().min(1).max(999),
   senderNickname: z.string().trim().min(1, "请填写打赏人昵称").max(100),
   note: z.string().max(500).optional().nullable(),
@@ -89,14 +84,22 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
     return { ok: false as const, error: "陪玩不存在" };
   }
 
-  const totalCents = d.giftTierCents * d.quantity;
+  // Look up the gift template
+  const [template] = await db
+    .select({ id: giftTemplate.id, name: giftTemplate.name, priceCents: giftTemplate.priceCents })
+    .from(giftTemplate)
+    .where(and(eq(giftTemplate.id, d.giftTemplateId), eq(giftTemplate.active, true)))
+    .limit(1);
+  if (!template) return { ok: false as const, error: "礼物不存在或已停用" };
+
+  const totalCents = template.priceCents * d.quantity;
   if (totalCents > MAX_AMOUNT_CENTS) {
     return { ok: false as const, error: "礼物总金额超出上限" };
   }
   const feeRateBp = DEFAULT_GIFT_FEE_RATE_BP;
   const { platformFee, playerEarn } = computeSplit(totalCents, feeRateBp);
 
-  const tierLabel = GIFT_TIER_LABELS[d.giftTierCents] ?? String(d.giftTierCents / 100);
+  const tierLabel = template.name + " " + (template.priceCents / 100) + "元";
 
   if (d.id) {
     const [existing] = await db
@@ -126,7 +129,9 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
       .update(giftRecord)
       .set({
         playerId: d.playerId,
-        giftTierCents: d.giftTierCents,
+        giftTierCents: template.priceCents,
+        giftName: template.name,
+        giftTemplateId: template.id,
         quantity: d.quantity,
         totalCents,
         platformFeeCents: pf2,
@@ -162,7 +167,9 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
     await db.insert(giftRecord).values({
       id,
       playerId: d.playerId,
-      giftTierCents: d.giftTierCents,
+      giftTierCents: template.priceCents,
+      giftName: template.name,
+      giftTemplateId: template.id,
       quantity: d.quantity,
       totalCents,
       feeRateBp,
@@ -232,7 +239,7 @@ export async function deleteGiftRecordAction(input: { id: string }) {
     targetType: "gift_record",
     targetId: input.id,
     detail: {
-      tier: GIFT_TIER_LABELS[existing.giftTierCents] ?? String(existing.giftTierCents / 100),
+      tier: String(existing.giftTierCents / 100) + "元",
       quantity: existing.quantity,
       sender: existing.senderNickname,
     },
@@ -360,6 +367,8 @@ export async function listGiftRecords(filter: ListGiftRecordFilter) {
         playerWechatQrPath: user.wechatQrPath,
         playerAlipayQrPath: user.alipayQrPath,
         giftTierCents: giftRecord.giftTierCents,
+        giftName: giftRecord.giftName,
+        giftTemplateId: giftRecord.giftTemplateId,
         quantity: giftRecord.quantity,
         totalCents: giftRecord.totalCents,
         feeRateBp: giftRecord.feeRateBp,
@@ -440,6 +449,8 @@ export async function getMyGiftRecords(opts: { tab?: "all" | "pending" | "settle
     .select({
       id: giftRecord.id,
       giftTierCents: giftRecord.giftTierCents,
+      giftName: giftRecord.giftName,
+      giftTemplateId: giftRecord.giftTemplateId,
       quantity: giftRecord.quantity,
       totalCents: giftRecord.totalCents,
       platformFeeCents: giftRecord.platformFeeCents,

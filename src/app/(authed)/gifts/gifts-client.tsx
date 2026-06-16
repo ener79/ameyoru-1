@@ -46,8 +46,7 @@ import { Pagination } from "@/components/pagination";
 
 import { formatYuan, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { GIFT_TIER_CENTS } from "@/db/schema";
-import { GIFT_TIER_LABELS, DEFAULT_GIFT_FEE_RATE_BP } from "@/lib/constants";
+import { DEFAULT_GIFT_FEE_RATE_BP } from "@/lib/constants";
 import { PlayerCombobox, type PlayerOption } from "@/components/player-combobox";
 import {
   upsertGiftRecordAction,
@@ -56,8 +55,15 @@ import {
   unsettleGiftAction,
 } from "@/server/actions/gifts";
 
+interface GiftTemplateOption {
+  id: string;
+  name: string;
+  priceCents: number;
+}
+
 interface Props {
   players: PlayerOption[];
+  templates: GiftTemplateOption[];
   records: GiftRecord[];
   total: number;
   pendingCount: number;
@@ -79,6 +85,8 @@ interface GiftRecord {
   playerWechatQrPath: string | null;
   playerAlipayQrPath: string | null;
   giftTierCents: number;
+  giftName: string | null;
+  giftTemplateId: string | null;
   quantity: number;
   totalCents: number;
   feeRateBp: number;
@@ -96,15 +104,10 @@ interface GiftRecord {
   createdAt: string;
 }
 
-const GIFT_TIER_SET = new Set<number>(GIFT_TIER_CENTS);
-
 const giftFormSchema = z.object({
   id: z.string().optional(),
   playerId: z.string().min(1, "请选择陪玩"),
-  giftTierCents: z
-    .number()
-    .int()
-    .refine((v) => GIFT_TIER_SET.has(v), "档位不合法"),
+  giftTemplateId: z.string().min(1, "请选择礼物"),
   quantity: z.coerce.number().int().min(1).max(999),
   senderNickname: z.string().trim().min(1, "请填写打赏人昵称").max(100),
   note: z.string().max(500).nullable(),
@@ -114,7 +117,7 @@ type GiftFormValues = z.infer<typeof giftFormSchema>;
 
 const EMPTY_FORM: GiftFormValues = {
   playerId: "",
-  giftTierCents: GIFT_TIER_CENTS[0],
+  giftTemplateId: "",
   quantity: 1,
   senderNickname: "",
   note: "",
@@ -145,6 +148,7 @@ function PaginationFor({
 
 export function GiftsAdminClient({
   players,
+  templates,
   records,
   total,
   pendingCount,
@@ -166,14 +170,20 @@ export function GiftsAdminClient({
     defaultValues: EMPTY_FORM,
   });
 
-  const giftTierCents = form.watch("giftTierCents");
+  const giftTemplateId = form.watch("giftTemplateId");
   const quantity = form.watch("quantity");
 
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === giftTemplateId),
+    [templates, giftTemplateId]
+  );
+
   const preview = useMemo(() => {
-    const totalCents = giftTierCents * (quantity || 1);
+    const priceCents = selectedTemplate?.priceCents ?? 0;
+    const totalCents = priceCents * (quantity || 1);
     const fee = Math.round((totalCents * DEFAULT_GIFT_FEE_RATE_BP) / 10000);
     return { total: totalCents, fee, earn: totalCents - fee };
-  }, [giftTierCents, quantity]);
+  }, [selectedTemplate, quantity]);
 
   function openNew() {
     setEditing(null);
@@ -186,7 +196,7 @@ export function GiftsAdminClient({
     form.reset({
       id: r.id,
       playerId: r.playerId,
-      giftTierCents: r.giftTierCents,
+      giftTemplateId: r.giftTemplateId ?? "",
       quantity: r.quantity,
       senderNickname: r.senderNickname,
       note: r.note ?? "",
@@ -308,14 +318,14 @@ export function GiftsAdminClient({
           />
         </div>
         <div>
-          <Label className="text-xs">档位</Label>
+          <Label className="text-xs">礼物</Label>
           <Select value={filter.tier} onValueChange={(v) => setParam("tier", v === "all" ? "" : v)}>
             <SelectTrigger className="mt-1"><SelectValue placeholder="全部" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部</SelectItem>
-              {GIFT_TIER_CENTS.map((t) => (
-                <SelectItem key={t} value={String(t)}>
-                  {GIFT_TIER_LABELS[t]} 元
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={String(t.priceCents)}>
+                  {t.name} ({t.priceCents / 100}元)
                 </SelectItem>
               ))}
             </SelectContent>
@@ -378,7 +388,7 @@ export function GiftsAdminClient({
                         </Badge>
                       )}
                       <Badge variant="default">
-                        {GIFT_TIER_LABELS[r.giftTierCents] ?? r.giftTierCents / 100} 元
+                        {r.giftName ?? r.giftTierCents / 100} 元
                       </Badge>
                       {r.quantity > 1 && (
                         <Badge variant="outline">× {r.quantity}</Badge>
@@ -498,24 +508,25 @@ export function GiftsAdminClient({
 
               <FormField
                 control={form.control}
-                name="giftTierCents"
+                name="giftTemplateId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>礼物档位 *</FormLabel>
-                    <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                      {GIFT_TIER_CENTS.map((t) => (
+                    <FormLabel>礼物 *</FormLabel>
+                    <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {templates.map((t) => (
                         <button
-                          key={t}
+                          key={t.id}
                           type="button"
-                          onClick={() => field.onChange(t)}
+                          onClick={() => field.onChange(t.id)}
                           className={cn(
-                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                            field.value === t
+                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors text-left",
+                            field.value === t.id
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-input hover:bg-accent"
                           )}
                         >
-                          {GIFT_TIER_LABELS[t]}
+                          <div>{t.name}</div>
+                          <div className="text-xs text-muted-foreground">{t.priceCents / 100}元</div>
                         </button>
                       ))}
                     </div>
@@ -646,7 +657,7 @@ function PayDialog({
           <div className="flex justify-between">
             <span className="text-muted-foreground">礼物</span>
             <span>
-              {GIFT_TIER_LABELS[record.giftTierCents] ?? record.giftTierCents / 100} 元
+              {record.giftName ?? record.giftTierCents / 100} 元
               {record.quantity > 1 && ` × ${record.quantity}`}
             </span>
           </div>

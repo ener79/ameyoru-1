@@ -1,4 +1,5 @@
 import { listGiftRecords, listPlayersForGift } from "@/server/actions/gifts";
+import { listGiftTemplates } from "@/server/actions/gift-templates";
 import { requireSession } from "@/lib/auth-helpers";
 import { GiftsAdminClient } from "./gifts-client";
 
@@ -31,14 +32,16 @@ export default async function GiftsAdminPage({ searchParams }: PageProps) {
     pageSize: 50,
   } as const;
 
-  const [{ rows, total, pendingCount, page, pageSize }, players] = await Promise.all([
+  const [{ rows, total, pendingCount, page, pageSize }, players, templates] = await Promise.all([
     listGiftRecords(filter),
     listPlayersForGift(),
+    listGiftTemplates(),
   ]);
 
   return (
     <GiftsAdminClient
       players={players}
+      templates={templates}
       records={rows.map((r) => ({
         ...r,
         createdAt: r.createdAt.toISOString(),

@@ -1,4 +1,5 @@
 import { getMyGiftRecords, getMyGiftStats, fetchAndMarkUnreadGifts } from "@/server/actions/gifts";
+import { listGiftTemplates } from "@/server/actions/gift-templates";
 import { requireSession } from "@/lib/auth-helpers";
 import { Pagination } from "@/components/pagination";
 import { MyGiftsClient } from "./my-gifts-client";
@@ -17,10 +18,11 @@ export default async function MyGiftsPage({
   const offset = (page - 1) * PAGE_SIZE;
 
   // 进入此页面就把所有未读标记已读,并取出未读的具体记录用于弹窗
-  const [stats, records, unread] = await Promise.all([
+  const [stats, records, unread, templates] = await Promise.all([
     getMyGiftStats(),
     getMyGiftRecords({ tab, limit: PAGE_SIZE, offset }),
     fetchAndMarkUnreadGifts(),
+    listGiftTemplates(),
   ]);
 
   const total =
@@ -33,6 +35,7 @@ export default async function MyGiftsPage({
         myId={me.id}
         tab={tab}
         stats={stats}
+        templates={templates}
         records={records.map((r) => ({
           ...r,
           createdAt: r.createdAt.toISOString(),

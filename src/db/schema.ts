@@ -386,16 +386,6 @@ export const giftTemplate = mysqlTable(
 
 /* ----------------------------- 礼物打赏记录 ----------------------------- */
 
-/**
- * 外部平台(抖音/直播/微信等)打赏礼物 → 老板内部转账给陪玩 → 此处仅做展示与抽成记账。
- *
- * 所有金额单位均为"分",与订单系统保持一致。
- * 抽成比例存当时的快照(feeRateBp),后续调整不影响历史记录。
- * giftTier 限制为 6 个固定档位(分),便于统计与防止误输。
- */
-export const GIFT_TIER_CENTS = [6800, 12800, 25800, 52000, 131400, 520000] as const;
-export type GiftTierCents = (typeof GIFT_TIER_CENTS)[number];
-
 export const giftRecord = mysqlTable(
   "gift_record",
   {

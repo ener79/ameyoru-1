@@ -42,12 +42,3 @@ export const BOSS_USERNAME = "boss";
  */
 export const DEFAULT_GIFT_FEE_RATE_BP = 1500;
 
-/** 礼物档位的人类可读标签(用于按钮文案与日志详情)。 */
-export const GIFT_TIER_LABELS: Record<number, string> = {
-  6800: "68",
-  12800: "128",
-  25800: "258",
-  52000: "520",
-  131400: "1314",
-  520000: "5200",
-};
