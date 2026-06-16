@@ -48,6 +48,7 @@ import {
 } from "@/server/actions/player-invites";
 import {
   createStaffAction,
+  createServiceAction,
   deleteStaffAction,
   resetUserPasswordAction,
   toggleUserActiveAction,
@@ -85,14 +86,17 @@ interface Credential {
 export function StaffClient({
   isBoss,
   staff,
+  serviceUsers,
   invites,
 }: {
   isBoss: boolean;
   staff: Staff[];
+  serviceUsers: Staff[];
   invites: Invite[];
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createServiceOpen, setCreateServiceOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
   const [credentialDialog, setCredentialDialog] = useState<Credential | null>(
@@ -273,9 +277,113 @@ export function StaffClient({
         </Card>
       )}
 
+      {/* 客服 */}
+      {isBoss && (
+        <>
+          <div className="mt-8 mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              客服 · 共 {serviceUsers.length} 位,
+              {serviceUsers.filter((s) => s.active).length} 位活跃
+            </div>
+            <Button onClick={() => setCreateServiceOpen(true)}>
+              <Plus /> 新建客服
+            </Button>
+          </div>
+          {serviceUsers.length === 0 ? (
+            <EmptyState
+              icon={<Plus />}
+              title="还没有客服"
+              description="客服可派单、看订单/客户/排行/礼物,但不能结算或管理陪玩"
+              action={
+                <Button onClick={() => setCreateServiceOpen(true)}>
+                  <Plus /> 新建客服
+                </Button>
+              }
+            />
+          ) : (
+            <Card className="overflow-hidden p-0">
+              <ul className="divide-y">
+                {serviceUsers.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/40"
+                  >
+                    <Avatar className="size-9">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        {avatarInitial(s.displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{s.displayName}</span>
+                        <Badge variant="secondary" className="text-[10px]">客服</Badge>
+                        {!s.active && (
+                          <Badge variant="outline" className="text-[10px]">
+                            已停用
+                          </Badge>
+                        )}
+                        {s.active && s.mustChangePwd && (
+                          <Badge variant="warning" className="text-[10px]">
+                            待改密
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        @{s.username}
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="操作">
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          onClick={() => setConfirmResetStaff(s)}
+                          disabled={pending}
+                        >
+                          <RotateCw /> 重置密码
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {s.active ? (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleToggle(s)}
+                          >
+                            <PowerOff /> 停用账号
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={() => handleToggle(s)}>
+                            <Power /> 激活账号
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setConfirmDeleteStaff(s)}
+                          disabled={pending}
+                        >
+                          <Trash2 /> 删除账号
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </>
+      )}
+
       <CreateStaffDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCreated={(c) => setCredentialDialog(c)}
+      />
+      <CreateServiceDialog
+        open={createServiceOpen}
+        onOpenChange={setCreateServiceOpen}
         onCreated={(c) => setCredentialDialog(c)}
       />
       <CreateInviteDialog
@@ -549,6 +657,89 @@ function CreateStaffDialog({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="小莉"
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="animate-spin" />} 创建
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateServiceDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreated: (info: Credential) => void;
+}) {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function reset() {
+    setUsername("");
+    setDisplayName("");
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await createServiceAction({ username, displayName });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      onOpenChange(false);
+      reset();
+      router.refresh();
+      onCreated({
+        title: `客服 ${res.displayName} 创建成功`,
+        description: "把这个初始密码交给客服,登录后会强制改密。",
+        username: res.username,
+        password: res.initialPassword,
+      });
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>新建客服</DialogTitle>
+          <DialogDescription>
+            客服可派单、看订单/客户/排行/礼物,但不能结算或管理陪玩
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="service-username">用户名(登录用)</Label>
+              <Input
+                id="service-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="kefu1"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="service-name">显示名</Label>
+              <Input
+                id="service-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="小客"
                 required
               />
             </div>

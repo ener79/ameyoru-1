@@ -8,7 +8,7 @@ import { StaffClient } from "./staff-client";
 export default async function StaffPage() {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
 
-  const [staff, invites] = await Promise.all([
+  const [staff, serviceUsers, invites] = await Promise.all([
     db
       .select({
         id: user.id,
@@ -20,6 +20,18 @@ export default async function StaffPage() {
       })
       .from(user)
       .where(eq(user.role, "STAFF"))
+      .orderBy(desc(user.createdAt)),
+    db
+      .select({
+        id: user.id,
+        username: user.username,
+        displayName: user.name,
+        active: user.active,
+        mustChangePwd: user.mustChangePwd,
+        createdAt: user.createdAt,
+      })
+      .from(user)
+      .where(eq(user.role, "SERVICE"))
       .orderBy(desc(user.createdAt)),
     db
       .select({
@@ -39,6 +51,15 @@ export default async function StaffPage() {
       .limit(100),
   ]);
 
+  const toRow = (s: typeof staff[number]) => ({
+    id: s.id,
+    username: s.username ?? "",
+    displayName: s.displayName,
+    active: s.active,
+    mustChangePwd: s.mustChangePwd,
+    createdAt: s.createdAt.toISOString(),
+  });
+
   return (
     <>
       <PageHeader
@@ -47,14 +68,8 @@ export default async function StaffPage() {
       />
       <StaffClient
         isBoss={me.role === "BOSS"}
-        staff={staff.map((s) => ({
-          id: s.id,
-          username: s.username ?? "",
-          displayName: s.displayName,
-          active: s.active,
-          mustChangePwd: s.mustChangePwd,
-          createdAt: s.createdAt.toISOString(),
-        }))}
+        staff={staff.map(toRow)}
+        serviceUsers={serviceUsers.map(toRow)}
         invites={invites.map((i) => ({
           ...i,
           expiresAt: i.expiresAt.toISOString(),
