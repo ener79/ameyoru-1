@@ -46,8 +46,8 @@ export const user = mysqlTable("user", {
   displayUsername: varchar("display_username", { length: 64 }),
 
   // 业务字段
-  // BOSS = 店主(全权限);STAFF = 客服/店长(派单/看数据,不管员工);PLAYER = 陪玩
-  role: mysqlEnum("role", ["BOSS", "STAFF", "PLAYER"])
+  // BOSS = 店主(全权限);STAFF = 店长(派单/看数据/结算);SERVICE = 客服(派单/看数据,不能结算/管人);PLAYER = 陪玩
+  role: mysqlEnum("role", ["BOSS", "STAFF", "SERVICE", "PLAYER"])
     .notNull()
     .default("PLAYER"),
   active: boolean("active").notNull().default(true),
@@ -291,7 +291,7 @@ export const customerBalanceTxnPlayer = mysqlTable(
 
 /* ------------------------------- 类型 ------------------------------- */
 
-export type Role = "BOSS" | "STAFF" | "PLAYER";
+export type Role = "BOSS" | "STAFF" | "SERVICE" | "PLAYER";
 export type PlayerGender = "MALE" | "FEMALE";
 export type OrderStatus = "IN_PROGRESS" | "COMPLETED" | "CANCELED";
 export type SettleStatus = "UNSETTLED" | "SETTLED";
@@ -367,6 +367,23 @@ export const auditLog = mysqlTable(
   ]
 );
 
+/* ----------------------------- 礼物模板 ----------------------------- */
+
+export const giftTemplate = mysqlTable(
+  "gift_template",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    priceCents: int("price_cents").notNull(),
+    sortOrder: int("sort_order").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [index("gift_template_active_idx").on(t.active, t.sortOrder)]
+);
+
 /* ----------------------------- 礼物打赏记录 ----------------------------- */
 
 /**
@@ -387,6 +404,8 @@ export const giftRecord = mysqlTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     giftTierCents: int("gift_tier_cents").notNull(),
+    giftName: varchar("gift_name", { length: 100 }),
+    giftTemplateId: varchar("gift_template_id", { length: ID_LEN }),
     quantity: int("quantity").notNull().default(1),
     totalCents: int("total_cents").notNull(),
     feeRateBp: int("fee_rate_bp").notNull(),

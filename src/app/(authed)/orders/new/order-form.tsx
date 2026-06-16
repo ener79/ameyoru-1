@@ -47,10 +47,12 @@ interface Player {
 
 export function OrderForm({
   isManager,
+  canDiscount = isManager,
   players,
   recentCustomers,
 }: {
   isManager: boolean;
+  canDiscount?: boolean;
   players: Player[];
   recentCustomers: Customer[];
 }) {
@@ -140,7 +142,7 @@ export function OrderForm({
     [customerId, recentCustomers]
   );
   const prepayUsedCents =
-    computed && isManager && usePrepay
+    computed && canDiscount && usePrepay
       ? Math.min(selectedCustomer?.balanceCents ?? 0, computed.payableCents)
       : 0;
   const cashDueCents = computed ? computed.payableCents - prepayUsedCents : 0;
@@ -178,8 +180,8 @@ export function OrderForm({
         startAt: startAt!.toISOString(),
         endAt: endAt!.toISOString(),
         hourlyRateYuan: rate,
-        discountYuan: isManager && discount ? discount : undefined,
-        usePrepay: isManager ? usePrepay : undefined,
+        discountYuan: canDiscount && discount ? discount : undefined,
+        usePrepay: canDiscount ? usePrepay : undefined,
         note: note || null,
       });
       if (!res.ok) {
@@ -270,7 +272,7 @@ export function OrderForm({
                 placeholder="客户微信(选填,用于区分同名老板)"
               />
             )}
-            {isManager && selectedCustomer && (
+            {canDiscount && selectedCustomer && (
               <label className="mt-3 flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
                 <Checkbox
                   className="mt-0.5"
@@ -353,7 +355,7 @@ export function OrderForm({
                 </p>
               )}
             </div>
-            {isManager && (
+            {canDiscount && (
               <div className="space-y-2">
                 <Label htmlFor="discount" className="flex items-center gap-1.5">
                   <Tag className="size-3.5 text-warning" />
@@ -416,7 +418,7 @@ export function OrderForm({
               mono
               bold
             />
-            {isManager && prepayUsedCents > 0 && (
+            {canDiscount && prepayUsedCents > 0 && (
               <>
                 <PreviewRow
                   label="预存抵扣"
@@ -439,7 +441,7 @@ export function OrderForm({
               mono
               muted
             />
-            {isManager && hasDiscount && (
+            {canDiscount && hasDiscount && (
               <PreviewRow
                 label="店铺毛利"
                 value={computed ? formatYuan(computed.shopProfitCents) : "—"}

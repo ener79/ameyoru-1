@@ -16,7 +16,7 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
   const page = Math.max(1, parseInt(params.page ?? "1") || 1);

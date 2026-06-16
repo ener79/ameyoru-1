@@ -34,6 +34,16 @@ const staffNav: NavItem[] = [
   { href: "/gifts", label: "礼物" },
 ];
 
+const serviceNav: NavItem[] = [
+  { href: "/overview", label: "总览" },
+  { href: "/orders", label: "订单" },
+  { href: "/orders/new", label: "派单" },
+  { href: "/customers", label: "客户" },
+  { href: "/leaderboard", label: "排行榜" },
+  { href: "/announcements", label: "公告" },
+  { href: "/gifts", label: "礼物" },
+];
+
 const playerNav: NavItem[] = [
   { href: "/overview", label: "总览" },
   { href: "/orders/new", label: "报单" },
@@ -46,12 +56,14 @@ const playerNav: NavItem[] = [
 function navForRole(role: Role): NavItem[] {
   if (role === "BOSS") return bossNav;
   if (role === "STAFF") return staffNav;
+  if (role === "SERVICE") return serviceNav;
   return playerNav;
 }
 
 const roleLabel: Record<Role, string> = {
   BOSS: "店主",
   STAFF: "店长",
+  SERVICE: "客服",
   PLAYER: "陪玩",
 };
 
@@ -88,7 +100,7 @@ export default async function AuthedLayout({
         item.href === "/my-gifts" ? { ...item, badge: total } : item
       );
     }
-  } else if (user.role === "BOSS" || user.role === "STAFF") {
+  } else if (user.role === "BOSS" || user.role === "STAFF" || user.role === "SERVICE") {
     // 后台:待支付礼物报单数体现在「礼物」入口
     const pendingRows = await db
       .select({ count: sql<number>`count(*)`.mapWith(Number) })

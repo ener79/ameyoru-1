@@ -99,3 +99,13 @@ export async function getOptionalSession() {
 export function isStaffOrBoss(role: Role): boolean {
   return role === "BOSS" || role === "STAFF";
 }
+
+/** 能看管理端页面、派单、报礼物单(BOSS / STAFF / SERVICE) */
+export function isManagementRole(role: Role): boolean {
+  return role === "BOSS" || role === "STAFF" || role === "SERVICE";
+}
+
+/** 能结算、管陪玩、管客户财务(BOSS / STAFF) */
+export function isFullManager(role: Role): boolean {
+  return role === "BOSS" || role === "STAFF";
+}

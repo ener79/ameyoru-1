@@ -275,6 +275,24 @@ export async function createStaffAction(
   return res;
 }
 
+export async function createServiceAction(
+  input: z.infer<typeof createStaffSchema>
+): Promise<CreateResult> {
+  // 仅 BOSS 可创建客服账号
+  await requireSession({ role: "BOSS" });
+  const parsed = createStaffSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "参数错误" };
+  }
+  const res = await createUser({
+    username: parsed.data.username,
+    displayName: parsed.data.displayName,
+    role: "SERVICE",
+  });
+  if (res.ok) revalidatePath("/staff");
+  return res;
+}
+
 export async function toggleUserActiveAction(input: {
   id: string;
   active: boolean;
@@ -292,9 +310,9 @@ export async function toggleUserActiveAction(input: {
   if (!target || target.role === "BOSS") {
     return { ok: false as const, error: "目标账号不存在或无权操作" };
   }
-  // STAFF 之间互不能停用,只有 BOSS 能管理店长账号
-  if (target.role === "STAFF" && me.role !== "BOSS") {
-    return { ok: false as const, error: "只有店主可以管理店长账号" };
+  // STAFF 之间互不能停用,只有 BOSS 能管理店长/客服账号
+  if ((target.role === "STAFF" || target.role === "SERVICE") && me.role !== "BOSS") {
+    return { ok: false as const, error: "只有店主可以管理店长/客服账号" };
   }
 
   await db
@@ -360,9 +378,9 @@ export async function resetUserPasswordAction(input: {
   if (!target || target.role === "BOSS") {
     return { ok: false, error: "目标账号不存在或无权操作" };
   }
-  // STAFF 不能重置其他 STAFF 的密码(等价于踢出账号,只有 BOSS 能做)
-  if (target.role === "STAFF" && me.role !== "BOSS") {
-    return { ok: false, error: "只有店主可以管理店长账号" };
+  // STAFF 不能重置其他 STAFF/SERVICE 的密码(等价于踢出账号,只有 BOSS 能做)
+  if ((target.role === "STAFF" || target.role === "SERVICE") && me.role !== "BOSS") {
+    return { ok: false, error: "只有店主可以管理店长/客服账号" };
   }
 
   const newPassword = generateInitialPassword();

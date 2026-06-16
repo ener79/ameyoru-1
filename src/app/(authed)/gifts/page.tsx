@@ -14,7 +14,7 @@ interface PageProps {
 }
 
 export default async function GiftsAdminPage({ searchParams }: PageProps) {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const sp = await searchParams;
 
   const tab = sp.tab ?? "pending"; // 默认显示待支付

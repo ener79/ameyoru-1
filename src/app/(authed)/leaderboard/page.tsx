@@ -46,10 +46,10 @@ export default async function LeaderboardPage({
         title="排行榜"
         description={
           type === "gifts"
-            ? me.role === "BOSS" || me.role === "STAFF"
+            ? me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE"
               ? "礼物打赏排行,展示打赏人和陪玩收入关系"
               : "礼物打赏排行,只能看见自己的具体收益"
-            : me.role === "BOSS" || me.role === "STAFF"
+            : me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE"
             ? "按总时长排序,显示每位陪玩的接单情况"
             : "按总时长排序,只能看见自己的具体收益"
         }
@@ -84,9 +84,9 @@ export default async function LeaderboardPage({
       </div>
 
       {type === "gifts" ? (
-        <GiftsBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF"} />
+        <GiftsBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE"} />
       ) : (
-        <OrdersBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF"} />
+        <OrdersBoard sp={sp} myId={me.id} isBoss={me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE"} />
       )}
     </>
   );

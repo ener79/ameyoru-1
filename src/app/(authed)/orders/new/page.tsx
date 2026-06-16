@@ -8,7 +8,8 @@ import type { PlayerGender } from "@/db/schema";
 
 export default async function NewOrderPage() {
   const { user: me } = await requireSession();
-  const isManager = me.role === "BOSS" || me.role === "STAFF";
+  const isManager = me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE";
+  const canDiscount = me.role === "BOSS" || me.role === "STAFF";
 
   let players: {
     id: string;
@@ -66,6 +67,7 @@ export default async function NewOrderPage() {
       />
       <OrderForm
         isManager={isManager}
+        canDiscount={canDiscount}
         players={players}
         recentCustomers={recentCustomers}
       />

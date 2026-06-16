@@ -195,9 +195,9 @@ export async function createOrderAction(input: CreateOrderInput) {
     };
   }
 
-  // 陪玩自报不允许填优惠
+  // 陪玩自报不允许填优惠;客服不允许填优惠
   const discountCents =
-    me.role === "PLAYER" || !data.discountYuan
+    me.role === "PLAYER" || me.role === "SERVICE" || !data.discountYuan
       ? 0
       : yuanStringToCents(data.discountYuan);
   if (discountCents > MAX_AMOUNT_CENTS) {
@@ -225,7 +225,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       : endAt;
 
   const id = nanoid();
-  const canUsePrepay = me.role !== "PLAYER" && !!data.usePrepay;
+  const canUsePrepay = me.role !== "PLAYER" && me.role !== "SERVICE" && !!data.usePrepay;
   let prepayUsedCents = 0;
   await db.transaction(async (tx) => {
     const [currentCustomer] = await tx

@@ -65,7 +65,7 @@ function giftVisibleAt() {
  */
 export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
   const { user: me } = await requireSession();
-  const isManager = me.role === "BOSS" || me.role === "STAFF";
+  const isManager = me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE";
   if (!isManager && me.role !== "PLAYER") {
     return { ok: false as const, error: "无权限" };
   }
@@ -195,7 +195,7 @@ export async function upsertGiftRecordAction(input: UpsertGiftRecordInput) {
 
 export async function deleteGiftRecordAction(input: { id: string }) {
   const { user: me } = await requireSession();
-  const isManager = me.role === "BOSS" || me.role === "STAFF";
+  const isManager = me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE";
   if (!isManager && me.role !== "PLAYER") {
     return { ok: false as const, error: "无权限" };
   }
@@ -336,7 +336,7 @@ export async function unsettleGiftAction(input: { id: string }) {
 }
 
 export async function listGiftRecords(filter: ListGiftRecordFilter) {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const parsed = listFilterSchema.safeParse(filter);
   if (!parsed.success) return { records: [], total: 0, pendingCount: 0, rows: [], page: 1, pageSize: 50 };
   const f = parsed.data;
@@ -416,7 +416,7 @@ export async function listGiftRecords(filter: ListGiftRecordFilter) {
 }
 
 export async function listPlayersForGift() {
-  await requireSession({ role: ["BOSS", "STAFF"] });
+  await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   return db
     .select({
       id: user.id,
@@ -593,7 +593,7 @@ function rangeStart(range: z.infer<typeof rangeSchema>): Date | null {
  */
 export async function giftLeaderboard(range: "today" | "week" | "month" | "all" = "all") {
   const { user: me } = await requireSession();
-  const isManager = me.role === "BOSS" || me.role === "STAFF";
+  const isManager = me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE";
   const parsed = rangeSchema.safeParse(range);
   if (!parsed.success) return { senders: [], players: [], pairs: [] };
   const r = parsed.data;

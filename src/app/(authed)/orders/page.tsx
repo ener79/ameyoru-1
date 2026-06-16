@@ -31,7 +31,7 @@ export default async function OrdersPage({
   const { user: me } = await requireSession();
   const params = await searchParams;
   const initialOpenId = params.id ?? null;
-  const isManager = me.role === "BOSS" || me.role === "STAFF";
+  const isManager = me.role === "BOSS" || me.role === "STAFF" || me.role === "SERVICE";
 
   const q = params.q?.trim() ?? "";
   const tab = params.tab ?? "PENDING_SETTLE";
