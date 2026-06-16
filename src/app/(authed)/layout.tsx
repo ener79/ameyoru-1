@@ -10,6 +10,7 @@ import type { Role } from "@/db/schema";
 
 const bossNav: NavItem[] = [
   { href: "/overview", label: "总览" },
+  { href: "/investor-dashboard", label: "投资看板" },
   { href: "/orders", label: "订单" },
   { href: "/orders/new", label: "派单" },
   { href: "/players", label: "陪玩" },
