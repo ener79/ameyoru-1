@@ -59,6 +59,7 @@ interface GiftRecord {
 interface UnreadRecord {
   id: string;
   giftTierCents: number;
+  giftName: string | null;
   quantity: number;
   totalCents: number;
   platformFeeCents: number;
@@ -281,7 +282,7 @@ export function MyGiftsClient({ records, unread, templates, myId, tab, stats }: 
                         )}
                         <Gift className="size-4 text-pink-500" />
                         <Badge variant="default">
-                          {r.giftName ?? r.giftTierCents / 100} 元
+                          {r.giftName ?? `${r.giftTierCents / 100}元`}
                         </Badge>
                         {r.quantity > 1 && (
                           <Badge variant="outline">× {r.quantity}</Badge>
@@ -476,7 +477,7 @@ export function MyGiftsClient({ records, unread, templates, myId, tab, stats }: 
                     <span className="font-semibold">{u.senderNickname}</span>
                     {" 送了你 "}
                     <span className="font-semibold text-pink-600">
-                      {u.giftTierCents / 100} 元
+                      {u.giftName ?? `${u.giftTierCents / 100}元`}
                     </span>
                     {u.quantity > 1 && (
                       <span className="text-muted-foreground"> × {u.quantity}</span>

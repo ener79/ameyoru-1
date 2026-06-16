@@ -212,6 +212,7 @@ export async function deleteGiftRecordAction(input: { id: string }) {
       id: giftRecord.id,
       playerId: giftRecord.playerId,
       giftTierCents: giftRecord.giftTierCents,
+      giftName: giftRecord.giftName,
       quantity: giftRecord.quantity,
       senderNickname: giftRecord.senderNickname,
       settleStatus: giftRecord.settleStatus,
@@ -239,7 +240,7 @@ export async function deleteGiftRecordAction(input: { id: string }) {
     targetType: "gift_record",
     targetId: input.id,
     detail: {
-      tier: String(existing.giftTierCents / 100) + "元",
+      tier: existing.giftName ?? `${existing.giftTierCents / 100}元`,
       quantity: existing.quantity,
       sender: existing.senderNickname,
     },
@@ -551,6 +552,7 @@ export async function fetchAndMarkUnreadGifts() {
     .select({
       id: giftRecord.id,
       giftTierCents: giftRecord.giftTierCents,
+      giftName: giftRecord.giftName,
       quantity: giftRecord.quantity,
       totalCents: giftRecord.totalCents,
       platformFeeCents: giftRecord.platformFeeCents,

@@ -412,7 +412,7 @@ export function StaffClient({
         onOpenChange={(open) => { if (!open) setConfirmDeleteStaff(null); }}
         onConfirm={() => confirmDeleteStaff && handleDelete(confirmDeleteStaff)}
         title="删除账号"
-        description={`删除 ${confirmDeleteStaff?.displayName}?此操作不可撤销,有业务记录的店长会自动拦截`}
+        description={`删除 ${confirmDeleteStaff?.displayName}?此操作不可撤销,有业务记录的账号会自动拦截`}
         confirmLabel="删除"
       />
     </>

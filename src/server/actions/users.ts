@@ -329,7 +329,6 @@ export async function toggleUserActiveAction(input: {
 }
 
 export async function deleteStaffAction(input: { id: string }) {
-  // 仅 BOSS 可删除店长账号(STAFF 只能停用,见 toggleUserActiveAction)
   const { user: me } = await requireSession({ role: "BOSS" });
   if (input.id === me.id) {
     return { ok: false as const, error: "不能删除自己的账号" };
@@ -343,8 +342,8 @@ export async function deleteStaffAction(input: { id: string }) {
   if (!target) {
     return { ok: false as const, error: "账号不存在" };
   }
-  if (target.role !== "STAFF") {
-    return { ok: false as const, error: "只能删除店长账号" };
+  if (target.role !== "STAFF" && target.role !== "SERVICE") {
+    return { ok: false as const, error: "只能删除店长/客服账号" };
   }
 
   try {
@@ -355,7 +354,7 @@ export async function deleteStaffAction(input: { id: string }) {
   } catch {
     return {
       ok: false as const,
-      error: "该店长已有业务记录(订单/邀请/预存),只能停用,无法删除",
+      error: "该账号已有业务记录(订单/邀请/预存),只能停用,无法删除",
     };
   }
 

@@ -388,7 +388,7 @@ export function GiftsAdminClient({
                         </Badge>
                       )}
                       <Badge variant="default">
-                        {r.giftName ?? r.giftTierCents / 100} 元
+                        {r.giftName ?? `${r.giftTierCents / 100}元`}
                       </Badge>
                       {r.quantity > 1 && (
                         <Badge variant="outline">× {r.quantity}</Badge>
@@ -657,7 +657,7 @@ function PayDialog({
           <div className="flex justify-between">
             <span className="text-muted-foreground">礼物</span>
             <span>
-              {record.giftName ?? record.giftTierCents / 100} 元
+              {record.giftName ?? `${record.giftTierCents / 100}元`}
               {record.quantity > 1 && ` × ${record.quantity}`}
             </span>
           </div>
