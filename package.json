@@ -15,14 +15,10 @@
     "db:seed": "tsx scripts/seed.ts",
     "test:calc": "tsx scripts/test-calc.ts",
     "test:player-experience": "tsx scripts/test-player-experience.ts",
-    "test:customer-prepay": "tsx scripts/test-customer-prepay.ts",
     "test:customer-ledger": "tsx scripts/test-customer-ledger.ts",
-    "test:partner-customer-invite": "tsx scripts/test-partner-customer-invite.ts",
     "test:security-hardening": "tsx scripts/test-security-hardening.ts",
     "test:qr-security-code": "tsx scripts/test-qr-security-code.ts",
-    "test:upload-limit": "tsx scripts/test-upload-limit.ts",
-    "test:investor-dashboard-calc": "tsx scripts/test-investor-dashboard-calc.ts",
-    "db:migrate-from-sqlite": "tsx scripts/migrate-sqlite-to-mysql.ts"
+    "test:upload-limit": "tsx scripts/test-upload-limit.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
