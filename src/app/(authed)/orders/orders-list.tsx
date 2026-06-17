@@ -139,6 +139,7 @@ export function OrdersList({
   dateTo?: string;
 }) {
   const canManage = role === "BOSS" || role === "STAFF";
+  const canView = canManage || role === "SERVICE";
 
   function handleExportCSV() {
     return exportOrdersCSV({ q: searchQuery, dateFrom, dateTo });
@@ -197,7 +198,7 @@ export function OrdersList({
           {canManage && <ExportCSVButton label="导出" onExport={handleExportCSV} />}
           <div className="text-xs text-muted-foreground">
             {totals.count} 单 ·{" "}
-            {canManage ? (
+            {canView ? (
               <>
                 <span className="text-muted-foreground">实付 </span>
                 <span className="font-mono tabular-nums text-foreground">
@@ -237,7 +238,7 @@ export function OrdersList({
                       isCanceled && "opacity-70"
                     )}
                   >
-                    {canManage && (
+                    {canView && (
                       <Avatar className="size-8 shrink-0">
                         <AvatarFallback className="bg-primary/10 text-primary text-xs">
                           {avatarInitial(o.playerName)}
@@ -246,7 +247,7 @@ export function OrdersList({
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 truncate text-sm font-medium">
-                        {canManage && (
+                        {canView && (
                           <>
                             <span>{o.playerName}</span>
                             {o.depositPaid && (
@@ -274,16 +275,16 @@ export function OrdersList({
                           <span className="font-mono">{formatYuan(o.hourlyRateCents)}/h</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground">{canManage ? "实付 " : "应得 "}</span>
-                          <span className="font-mono font-medium">{canManage ? (isCanceled ? "—" : formatYuan(o.payableCents)) : formatYuan(payoutCents)}</span>
+                          <span className="text-muted-foreground">{canView ? "实付 " : "应得 "}</span>
+                          <span className="font-mono font-medium">{canView ? (isCanceled ? "—" : formatYuan(o.payableCents)) : formatYuan(payoutCents)}</span>
                         </div>
-                        {canManage && (
+                        {canView && (
                           <div>
                             <span className="text-muted-foreground">应得 </span>
                             <span className="font-mono text-success">{formatYuan(payoutCents)}</span>
                           </div>
                         )}
-                        {canManage && o.dispatcherId !== o.playerId && (
+                        {canView && o.dispatcherId !== o.playerId && (
                           <div>
                             <span className="text-muted-foreground">派单 </span>
                             <span>{o.dispatcherName}</span>
@@ -381,6 +382,7 @@ function OrderDetailSheet({
   const [confirmUnsettle, setConfirmUnsettle] = useState(false);
 
   const canManage = role === "BOSS" || role === "STAFF";
+  const canView = canManage || role === "SERVICE";
 
   const hasDiscount = !!(order && order.discountCents > 0);
   const isCanceled = order?.orderStatus === "CANCELED";
@@ -468,7 +470,7 @@ function OrderDetailSheet({
                 </div>
 
                 <div className="space-y-3">
-                  {canManage && (
+                  {canView && (
                     <DetailRow label="陪玩" value={order.playerName} />
                   )}
                   <DetailRow
@@ -482,7 +484,7 @@ function OrderDetailSheet({
                       </span>
                     }
                   />
-                  {canManage && order.customerWechat && (
+                  {canView && order.customerWechat && (
                     <DetailRow
                       label="微信"
                       value={
@@ -493,7 +495,7 @@ function OrderDetailSheet({
                       }
                     />
                   )}
-                  {canManage && order.dispatcherId !== order.playerId && (
+                  {canView && order.dispatcherId !== order.playerId && (
                     <DetailRow label="派单人" value={order.dispatcherName} />
                   )}
                   <DetailRow
@@ -512,7 +514,7 @@ function OrderDetailSheet({
                     label="单价"
                     value={`${formatYuan(order.hourlyRateCents)} / 小时`}
                   />
-                  {canManage && hasDiscount && !isCanceled && (
+                  {canView && hasDiscount && !isCanceled && (
                     <>
                       <DetailRow
                         label="原价"
@@ -534,7 +536,7 @@ function OrderDetailSheet({
                       value={formatYuan(order.payableCents)}
                     />
                   )}
-                  {canManage && !isCanceled && order.prepayUsedCents > 0 && (
+                  {canView && !isCanceled && order.prepayUsedCents > 0 && (
                     <>
                       <DetailRow
                         label="预存抵扣"
@@ -552,7 +554,7 @@ function OrderDetailSheet({
                       />
                     </>
                   )}
-                  {canManage && hasDiscount && !isCanceled && (
+                  {canView && hasDiscount && !isCanceled && (
                     <DetailRow
                       label="店铺毛利"
                       value={
@@ -648,7 +650,7 @@ function OrderDetailSheet({
                 onComplete={() =>
                   run(
                     () => completeOrderAction({ id: order.id }),
-                    role === "SERVICE" || role === "STAFF" ? "已标记已收钱" : "已标记为完成"
+                    role !== "BOSS" ? "已标记已收钱" : "已标记为完成"
                   )
                 }
                 onOpenCancel={() => setCancelOpen(true)}
@@ -744,7 +746,7 @@ function ActionBar({
       <div className="border-t px-6 py-4 space-y-2">
         <Button className="w-full" onClick={onComplete} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-          {role === "SERVICE" || role === "STAFF" ? "标记已收钱" : "标记已完成"}
+          {role !== "BOSS" ? "标记已收钱" : "标记已完成"}
         </Button>
         {canManage && (
           <Button

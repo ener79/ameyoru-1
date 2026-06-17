@@ -7,16 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import type { Role } from "@/db/schema";
+
 interface OrdersFilterBarProps {
   q: string;
   tab: string;
   dateFrom: string;
   dateTo: string;
-  isManager: boolean;
-  isService?: boolean;
+  role: Role;
 }
 
-export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager, isService }: OrdersFilterBarProps) {
+export function OrdersFilterBar({ q, tab, dateFrom, dateTo, role }: OrdersFilterBarProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,8 +64,8 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager, isService
         <TabsList>
           <TabsTrigger value="PENDING_SETTLE">待结算</TabsTrigger>
           <TabsTrigger value="IN_PROGRESS">进行中</TabsTrigger>
-          {!isService && <TabsTrigger value="SETTLED">已结算</TabsTrigger>}
-          {!isService && <TabsTrigger value="all">全部</TabsTrigger>}
+          {role !== "SERVICE" && <TabsTrigger value="SETTLED">已结算</TabsTrigger>}
+          {role !== "SERVICE" && <TabsTrigger value="all">全部</TabsTrigger>}
         </TabsList>
       </Tabs>
 
@@ -78,7 +79,7 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager, isService
           )}
           <Input
             defaultValue={q}
-            placeholder={isManager ? "搜索客户名/陪玩名/会员号…" : "搜索客户名…"}
+            placeholder={role !== "PLAYER" ? "搜索客户名/陪玩名/会员号…" : "搜索客户名…"}
             className="pl-9 pr-8"
             onChange={(e) => handleSearch(e.target.value)}
           />
@@ -92,7 +93,7 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager, isService
           )}
         </div>
 
-        {isManager && (
+        {role !== "PLAYER" && (
           <>
             <Input
               type="date"

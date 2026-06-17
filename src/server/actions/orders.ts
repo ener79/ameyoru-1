@@ -321,7 +321,7 @@ export async function completeOrderAction(input: { id: string }) {
     .set({
       orderStatus: "COMPLETED",
       completedAt: new Date(),
-      collectorName: me.role === "SERVICE" || me.role === "STAFF" ? me.name : null,
+      collectorName: me.role !== "BOSS" ? me.name : null,
     })
     .where(eq(order.id, input.id));
   invalidatePages(input.id);
