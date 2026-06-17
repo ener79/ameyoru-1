@@ -580,7 +580,7 @@ function OrderDetailSheet({
                   {order.collectorName && (
                     <DetailRow
                       label="收钱"
-                      value={`客服${order.collectorName} 已收钱`}
+                      value={`${order.collectorName} 已收钱`}
                     />
                   )}
                   {isCanceled && order.cancelFault && (
@@ -648,7 +648,7 @@ function OrderDetailSheet({
                 onComplete={() =>
                   run(
                     () => completeOrderAction({ id: order.id }),
-                    role === "SERVICE" ? "已标记已收钱" : "已标记为完成"
+                    role === "SERVICE" || role === "STAFF" ? "已标记已收钱" : "已标记为完成"
                   )
                 }
                 onOpenCancel={() => setCancelOpen(true)}
@@ -744,7 +744,7 @@ function ActionBar({
       <div className="border-t px-6 py-4 space-y-2">
         <Button className="w-full" onClick={onComplete} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-          {role === "SERVICE" ? "标记已收钱" : "标记已完成"}
+          {role === "SERVICE" || role === "STAFF" ? "标记已收钱" : "标记已完成"}
         </Button>
         {canManage && (
           <Button
