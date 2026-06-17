@@ -217,7 +217,7 @@ export function OrderForm({
 
         <Card className="p-5 space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="customer">客户(下单的老板)</Label>
+            <Label htmlFor="customer">{isManager ? "客户(下单的老板)" : "老板游戏ID"}</Label>
             <Input
               id="customer"
               value={customerName}
