@@ -13,9 +13,10 @@ interface OrdersFilterBarProps {
   dateFrom: string;
   dateTo: string;
   isManager: boolean;
+  isService?: boolean;
 }
 
-export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersFilterBarProps) {
+export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager, isService }: OrdersFilterBarProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,8 +63,8 @@ export function OrdersFilterBar({ q, tab, dateFrom, dateTo, isManager }: OrdersF
         <TabsList>
           <TabsTrigger value="PENDING_SETTLE">待结算</TabsTrigger>
           <TabsTrigger value="IN_PROGRESS">进行中</TabsTrigger>
-          <TabsTrigger value="SETTLED">已结算</TabsTrigger>
-          <TabsTrigger value="all">全部</TabsTrigger>
+          {!isService && <TabsTrigger value="SETTLED">已结算</TabsTrigger>}
+          {!isService && <TabsTrigger value="all">全部</TabsTrigger>}
         </TabsList>
       </Tabs>
 

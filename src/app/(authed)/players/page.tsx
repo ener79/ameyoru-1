@@ -10,7 +10,7 @@ export default async function PlayersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const { q = "" } = await searchParams;
 
   const conditions = [eq(user.role, "PLAYER")];

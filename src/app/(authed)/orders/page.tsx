@@ -183,6 +183,7 @@ export default async function OrdersPage({
         dateFrom={dateFrom}
         dateTo={dateTo}
         isManager={isManager}
+        isService={me.role === "SERVICE"}
       />
 
       <OrdersList
