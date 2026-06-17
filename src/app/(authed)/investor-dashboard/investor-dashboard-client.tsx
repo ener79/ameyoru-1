@@ -38,7 +38,6 @@ import { KpiCard } from "@/components/kpi-card";
 import { PageHeader } from "@/components/page-header";
 import { Section } from "@/components/section";
 import type { InvestorDashboardPayload } from "@/server/investor-dashboard";
-import { calculateInvestorDashboard } from "@/lib/investor-dashboard-calc";
 import {
   investorRangeLabels,
   type InvestorRangePreset,
@@ -76,32 +75,6 @@ export function InvestorDashboardClient({
     () => filterRows(payload.tables[activeTable], query),
     [activeTable, payload.tables, query]
   );
-  const calculated = useMemo(() => {
-    const actualAccountBalanceCents =
-      payload.financeInputs.wechatBalanceCents +
-      payload.financeInputs.alipayBalanceCents +
-      payload.financeInputs.bankBalanceCents;
-    const totalExpenseCents =
-      payload.financeInputs.operatingCostCents +
-      payload.financeInputs.promotionCostCents +
-      payload.financeInputs.fixedSalaryCents +
-      payload.financeInputs.otherExpenseCents;
-    return calculateInvestorDashboard({
-      ...payload.baseMetrics,
-      operatingCostCents: payload.financeInputs.operatingCostCents,
-      promotionCostCents: payload.financeInputs.promotionCostCents,
-      fixedSalaryCents: payload.financeInputs.fixedSalaryCents,
-      otherExpenseCents: payload.financeInputs.otherExpenseCents,
-      actualAccountBalanceCents,
-      totalInvestmentCents: payload.financeInputs.totalInvestmentCents,
-      cumulativeNetProfitCents:
-        payload.baseMetrics.recent30PlatformIncomeCents - totalExpenseCents,
-      cumulativeDividendCents: payload.financeInputs.cumulativeDividendCents,
-      recent30DayNetProfitCents:
-        payload.baseMetrics.recent30PlatformIncomeCents - totalExpenseCents,
-      consecutiveNegativeProfitDays: payload.risks.some((risk) => risk.code === "negative_profit") ? 2 : 0,
-    });
-  }, [payload.baseMetrics, payload.financeInputs, payload.risks]);
   const profitTrend = useMemo(
     () =>
       distributeCostsAcrossProfitTrend(
@@ -177,11 +150,11 @@ export function InvestorDashboardClient({
 
       <OperatingHealthPanel
         payload={payload}
-        cards={calculated.kpis}
-        investor={calculated.investor}
+        cards={payload.cards}
+        investor={payload.investor}
       />
-      <RiskPanel risks={calculated.risks} />
-      <KpiGrid cards={calculated.kpis} />
+      <RiskPanel risks={payload.risks} />
+      <KpiGrid cards={payload.cards} />
       <TrendGrid payload={payload} profitTrend={profitTrend} />
 
       <Section

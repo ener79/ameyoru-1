@@ -96,7 +96,7 @@ export interface GiftDetailRow {
   playerIncomeCents: number;
 }
 
-export interface ExpenseRow {
+interface ExpenseRow {
   id: string;
   date: string;
   type: "运营成本" | "推广成本" | "固定工资" | "其他支出";
@@ -211,6 +211,16 @@ export async function getInvestorDashboard(
   const cumulativeDividendCents = financeMock.dividends.reduce((sum, row) => sum + row.amountCents, 0);
   const cumulativeNetProfitCents = recent30NetProfitCents;
 
+  const trends = buildTrends({
+    from: range.from,
+    to: range.to,
+    orders: orderRows,
+    gifts: giftRows,
+    expenses,
+    newCustomers: newCustomerRows,
+    totalPlayerCount,
+  });
+
   const calcInput: InvestorDashboardInput = {
     orderRevenueCents,
     giftRevenueCents,
@@ -234,25 +244,10 @@ export async function getInvestorDashboard(
     totalPlayerCount,
     recent7DayGmvCents: recent7GmvRows.orderCents + recent7GmvRows.giftCents,
     previous7DayGmvCents: previous7GmvRows.orderCents + previous7GmvRows.giftCents,
-    consecutiveNegativeProfitDays: consecutiveNegativeProfitDays(
-      range.from,
-      range.to,
-      orderRows,
-      giftRows,
-      expenses
-    ),
+    consecutiveNegativeProfitDays: countNegativeProfitStreak(trends.profit),
   };
 
   const calculated = calculateInvestorDashboard(calcInput);
-  const trends = buildTrends({
-    from: range.from,
-    to: range.to,
-    orders: orderRows,
-    gifts: giftRows,
-    expenses,
-    newCustomers: newCustomerRows,
-    totalPlayerCount,
-  });
 
   return {
     range: {
@@ -261,7 +256,7 @@ export async function getInvestorDashboard(
       from: range.from.toISOString(),
       to: range.to.toISOString(),
     },
-  financeSource: "mock",
+    financeSource: "mock",
     baseMetrics: {
       orderRevenueCents,
       giftRevenueCents,
@@ -581,25 +576,12 @@ function countPlayersByDate(rows: OrderDetailRow[]) {
   return new Map([...buckets.entries()].map(([date, set]) => [date, set.size]));
 }
 
-function consecutiveNegativeProfitDays(
-  from: Date,
-  to: Date,
-  orders: OrderDetailRow[],
-  gifts: GiftDetailRow[],
-  expenses: ExpenseRow[]
+function countNegativeProfitStreak(
+  profitTrend: InvestorDashboardPayload["trends"]["profit"]
 ) {
-  const trends = buildTrends({
-    from,
-    to,
-    orders,
-    gifts,
-    expenses,
-    newCustomers: new Map(),
-    totalPlayerCount: 0,
-  });
   let streak = 0;
-  for (const row of [...trends.profit].reverse()) {
-    if (row.netProfitCents < 0) streak += 1;
+  for (let i = profitTrend.length - 1; i >= 0; i -= 1) {
+    if (profitTrend[i].netProfitCents < 0) streak += 1;
     else break;
   }
   return streak;
