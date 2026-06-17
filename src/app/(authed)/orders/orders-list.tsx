@@ -97,6 +97,7 @@ interface OrderRow {
   canceledAt: string | null;
   settledAt: string | null;
   paidMethod: PayMethod | null;
+  collectorName: string | null;
   cancelFault: CancelFault | null;
   cancelNote: string | null;
   note: string | null;
@@ -576,6 +577,12 @@ function OrderDetailSheet({
                       value={formatDateTime(order.completedAt)}
                     />
                   )}
+                  {order.collectorName && (
+                    <DetailRow
+                      label="收钱"
+                      value={`客服${order.collectorName} 已收钱`}
+                    />
+                  )}
                   {isCanceled && order.cancelFault && (
                     <DetailRow
                       label="责任方"
@@ -634,13 +641,14 @@ function OrderDetailSheet({
 
               <ActionBar
                 order={order}
+                role={role}
                 canManage={canManage}
                 isOwnOrder={order.playerId === myId}
                 pending={pending}
                 onComplete={() =>
                   run(
                     () => completeOrderAction({ id: order.id }),
-                    "已标记为完成"
+                    role === "SERVICE" ? "已标记已收钱" : "已标记为完成"
                   )
                 }
                 onOpenCancel={() => setCancelOpen(true)}
@@ -708,6 +716,7 @@ function OrderDetailSheet({
 
 function ActionBar({
   order,
+  role,
   canManage,
   isOwnOrder,
   pending,
@@ -718,6 +727,7 @@ function ActionBar({
   onUnsettle,
 }: {
   order: OrderRow;
+  role: Role;
   canManage: boolean;
   isOwnOrder: boolean;
   pending: boolean;
@@ -728,16 +738,14 @@ function ActionBar({
   onUnsettle: () => void;
 }) {
   if (order.orderStatus === "IN_PROGRESS") {
-    const canComplete = canManage;
+    const canComplete = canManage || role === "SERVICE";
     if (!canComplete) return null;
     return (
       <div className="border-t px-6 py-4 space-y-2">
-        {canComplete && (
-          <Button className="w-full" onClick={onComplete} disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-            标记已完成
-          </Button>
-        )}
+        <Button className="w-full" onClick={onComplete} disabled={pending}>
+          {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+          {role === "SERVICE" ? "标记已收钱" : "标记已完成"}
+        </Button>
         {canManage && (
           <Button
             variant="outline"

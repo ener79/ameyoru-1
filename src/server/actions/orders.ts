@@ -297,7 +297,7 @@ export async function createOrderAction(input: CreateOrderInput) {
 }
 
 export async function completeOrderAction(input: { id: string }) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const [target] = await db
     .select({
       playerId: order.playerId,
@@ -318,7 +318,11 @@ export async function completeOrderAction(input: { id: string }) {
   }
   await db
     .update(order)
-    .set({ orderStatus: "COMPLETED", completedAt: new Date() })
+    .set({
+      orderStatus: "COMPLETED",
+      completedAt: new Date(),
+      collectorName: me.role === "SERVICE" ? me.name : null,
+    })
     .where(eq(order.id, input.id));
   invalidatePages(input.id);
 

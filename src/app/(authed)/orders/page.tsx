@@ -108,6 +108,7 @@ export default async function OrdersPage({
     canceledAt: order.canceledAt,
     settledAt: order.settledAt,
     paidMethod: order.paidMethod,
+    collectorName: order.collectorName,
     note: order.note,
     cancelFault: order.cancelFault,
     cancelNote: order.cancelNote,

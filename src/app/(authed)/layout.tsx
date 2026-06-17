@@ -39,7 +39,6 @@ const serviceNav: NavItem[] = [
   { href: "/overview", label: "总览" },
   { href: "/orders", label: "订单" },
   { href: "/orders/new", label: "派单" },
-  { href: "/customers", label: "客户" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },

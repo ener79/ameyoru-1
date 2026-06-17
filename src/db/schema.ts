@@ -216,6 +216,8 @@ export const order = mysqlTable(
       .notNull()
       .default(0),
 
+    collectorName: varchar("collector_name", { length: 100 }),
+
     settleStatus: mysqlEnum("settle_status", ["UNSETTLED", "SETTLED"])
       .notNull()
       .default("UNSETTLED"),
