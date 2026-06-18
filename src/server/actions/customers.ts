@@ -16,18 +16,8 @@ import { getAffectedRows } from "@/lib/db-utils";
 import { MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { customerSummary } from "@/server/stats";
 import { yuanStringToCents } from "@/lib/format";
+import { optionalTrimmed } from "@/lib/validation";
 import { nanoid } from "../id";
-
-const optionalTrimmed = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((s) => {
-      const v = s?.trim();
-      return v ? v : null;
-    });
 
 const updateSchema = z.object({
   id: z.string(),

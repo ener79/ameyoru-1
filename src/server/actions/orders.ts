@@ -18,6 +18,7 @@ import {
   notifyOrderSettled,
   notifyOrderCanceled,
 } from "@/lib/wecom";
+import { optionalTrimmed } from "@/lib/validation";
 
 const CANCELABLE_ORDER_STATUSES = ["IN_PROGRESS", "COMPLETED"] as const;
 
@@ -30,17 +31,6 @@ function settlableOrderCondition() {
     )
   );
 }
-
-const optionalTrimmed = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((s) => {
-      const v = s?.trim();
-      return v ? v : null;
-    });
 
 const createSchema = z.object({
   playerId: z.string().optional(),

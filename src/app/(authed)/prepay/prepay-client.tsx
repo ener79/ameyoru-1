@@ -25,7 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { formatYuan } from "@/lib/format";
 import { addCustomerDepositAction } from "@/server/actions/customers";
@@ -34,6 +33,7 @@ import {
   reverseTxnAction,
   getPrepayLedgerAction,
 } from "@/server/actions/prepay";
+import { REVERSIBLE_TXN_TYPES } from "@/lib/constants";
 import type { CustomerBalanceTxnType } from "@/db/schema";
 
 interface PrepayCustomer {
@@ -63,7 +63,7 @@ const txnLabel: Record<CustomerBalanceTxnType, string> = {
   REVERSAL: "回撤",
 };
 
-const REVERSIBLE: string[] = ["DEPOSIT", "MANUAL_DEDUCT", "SERVICE_DEDUCT"];
+const REVERSIBLE: readonly string[] = REVERSIBLE_TXN_TYPES;
 
 export function PrepayClient({
   canManage,
@@ -361,14 +361,6 @@ function DeductDialog({
             />
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={pending}
-            >
-              取消
-            </Button>
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="animate-spin" />}
               确认扣款
@@ -574,13 +566,6 @@ function ReverseConfirmDialog({
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => onClose(false)}
-              disabled={pending}
-            >
-              取消
-            </Button>
             <Button onClick={handleConfirm} disabled={pending}>
               {pending && <Loader2 className="animate-spin" />}
               确认回撤

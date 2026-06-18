@@ -7,21 +7,11 @@ import { db } from "@/db";
 import { customer, customerBalanceTxn, user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
-import { MAX_AMOUNT_CENTS } from "@/lib/constants";
-import { yuanStringToCents, formatYuan } from "@/lib/format";
+import { MAX_AMOUNT_CENTS, REVERSIBLE_TXN_TYPES } from "@/lib/constants";
+import { yuanStringToCents } from "@/lib/format";
+import { optionalTrimmed } from "@/lib/validation";
 import { nanoid } from "../id";
 import { logAudit } from "../audit";
-
-const optionalTrimmed = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((s) => {
-      const v = s?.trim();
-      return v ? v : null;
-    });
 
 function revalidatePrepay() {
   revalidatePath("/prepay");
@@ -109,12 +99,6 @@ export async function prepayDeductAction(
   return { ok: true as const };
 }
 
-const REVERSIBLE_TYPES = [
-  "DEPOSIT",
-  "MANUAL_DEDUCT",
-  "SERVICE_DEDUCT",
-] as const;
-
 const reverseSchema = z.object({
   txnId: z.string(),
   note: optionalTrimmed(200),
@@ -149,7 +133,7 @@ export async function reverseTxnAction(
   if (!original) return { ok: false as const, error: "交易不存在" };
 
   if (
-    !(REVERSIBLE_TYPES as readonly string[]).includes(original.type)
+    !(REVERSIBLE_TXN_TYPES as readonly string[]).includes(original.type)
   ) {
     return { ok: false as const, error: "该交易类型不支持回撤" };
   }

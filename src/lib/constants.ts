@@ -42,3 +42,9 @@ export const BOSS_USERNAME = "boss";
  */
 export const DEFAULT_GIFT_FEE_RATE_BP = 1500;
 
+export const REVERSIBLE_TXN_TYPES = [
+  "DEPOSIT",
+  "MANUAL_DEDUCT",
+  "SERVICE_DEDUCT",
+] as const;
+
