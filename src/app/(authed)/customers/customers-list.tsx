@@ -454,6 +454,8 @@ const txnLabel: Record<CustomerBalanceTxnType, string> = {
   ORDER_DEBIT: "预存变动 · 订单抵扣",
   ORDER_REFUND: "预存变动 · 取消退回",
   MANUAL_DEDUCT: "预存扣减(老板提取)",
+  SERVICE_DEDUCT: "扣款",
+  REVERSAL: "回撤",
 };
 
 function DeductDialog({

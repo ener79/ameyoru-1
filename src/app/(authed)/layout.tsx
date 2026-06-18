@@ -16,6 +16,7 @@ const bossNav: NavItem[] = [
   { href: "/players", label: "陪玩" },
   { href: "/staff", label: "员工" },
   { href: "/customers", label: "客户" },
+  { href: "/prepay", label: "预存" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },
@@ -30,6 +31,7 @@ const staffNav: NavItem[] = [
   { href: "/players", label: "陪玩" },
   { href: "/staff", label: "员工" },
   { href: "/customers", label: "客户" },
+  { href: "/prepay", label: "预存" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
   { href: "/gifts", label: "礼物" },
@@ -39,6 +41,7 @@ const serviceNav: NavItem[] = [
   { href: "/orders", label: "订单" },
   { href: "/orders/new", label: "派单" },
   { href: "/players", label: "陪玩" },
+  { href: "/prepay", label: "预存" },
   { href: "/leaderboard", label: "排行榜" },
   { href: "/announcements", label: "公告" },
 ];

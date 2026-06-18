@@ -125,6 +125,7 @@ export async function addCustomerDepositAction(
 
   revalidatePath("/customers");
   revalidatePath("/orders/new");
+  revalidatePath("/prepay");
   return { ok: true as const };
 }
 
@@ -212,6 +213,7 @@ export async function deductCustomerBalanceAction(
 
   revalidatePath("/customers");
   revalidatePath("/orders/new");
+  revalidatePath("/prepay");
   return { ok: true as const };
 }
 
