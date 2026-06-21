@@ -739,6 +739,8 @@ function ActionBar({
   onSettle: (method: PayMethod) => void;
   onUnsettle: () => void;
 }) {
+  const canCancel = canManage || role === "SERVICE";
+
   if (order.orderStatus === "IN_PROGRESS") {
     const canComplete = canManage || role === "SERVICE";
     if (!canComplete) return null;
@@ -748,7 +750,7 @@ function ActionBar({
           {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
           {role !== "BOSS" ? "标记已收钱" : "标记已完成"}
         </Button>
-        {canManage && (
+        {canCancel && (
           <Button
             variant="outline"
             className="w-full text-destructive hover:text-destructive"
@@ -767,6 +769,22 @@ function ActionBar({
     order.settleStatus === "UNSETTLED" &&
     (order.orderStatus === "COMPLETED" ||
       (order.orderStatus === "CANCELED" && order.playerCompensationCents > 0));
+  if (canSettleNow && !canManage && canCancel && order.orderStatus === "COMPLETED") {
+    return (
+      <div className="border-t px-6 py-4 space-y-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-destructive hover:text-destructive"
+          onClick={onOpenCancel}
+          disabled={pending}
+        >
+          <XCircle /> 取消订单
+        </Button>
+      </div>
+    );
+  }
+
   if (canSettleNow && canManage) {
     const amount =
       order.orderStatus === "CANCELED"

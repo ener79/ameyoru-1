@@ -9,6 +9,7 @@ const authHelpers = read("src/lib/auth-helpers.ts");
 const auth = read("src/lib/auth.ts");
 const usersAction = read("src/server/actions/users.ts");
 const ordersAction = read("src/server/actions/orders.ts");
+const ordersList = read("src/app/(authed)/orders/orders-list.tsx");
 const qrAction = read("src/server/actions/qr.ts");
 const imageUpload = read("src/lib/image-upload.ts");
 const uploadRoute = read("src/app/api/uploads/[...path]/route.ts");
@@ -48,6 +49,8 @@ assert.match(changePasswordForm, /toast\.success\("密码已更新"\)/);
 assert.match(ordersAction, /selectedPlayer/);
 assert.match(ordersAction, /eq\(user\.role,\s*"PLAYER"\)/);
 assert.match(ordersAction, /eq\(user\.active,\s*true\)/);
+assert.match(ordersAction, /cancelOrderAction[\s\S]*requireSession\(\{ role: \["BOSS", "STAFF", "SERVICE"\] \}\)/);
+assert.match(ordersList, /const canCancel = canManage \|\| role === "SERVICE"/);
 
 assert.match(imageUpload, /detectImageUpload/);
 assert.match(imageUpload, /0xff/);
