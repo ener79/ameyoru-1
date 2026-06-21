@@ -50,7 +50,11 @@ assert.match(ordersAction, /selectedPlayer/);
 assert.match(ordersAction, /eq\(user\.role,\s*"PLAYER"\)/);
 assert.match(ordersAction, /eq\(user\.active,\s*true\)/);
 assert.match(ordersAction, /cancelOrderAction[\s\S]*requireSession\(\{ role: \["BOSS", "STAFF", "SERVICE"\] \}\)/);
+assert.match(ordersAction, /adjustOrderRateAction[\s\S]*requireSession\(\{ role: \["BOSS", "STAFF", "SERVICE"\] \}\)/);
+assert.match(ordersAction, /prepayUsedCents > 0[\s\S]*使用预存抵扣的订单不能修改单价/);
 assert.match(ordersList, /const canCancel = canManage \|\| role === "SERVICE"/);
+assert.match(ordersList, /const canAdjustRate = \(canManage \|\| role === "SERVICE"\)/);
+assert.match(ordersList, /AdjustRateDialog/);
 
 assert.match(imageUpload, /detectImageUpload/);
 assert.match(imageUpload, /0xff/);
