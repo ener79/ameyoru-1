@@ -289,14 +289,14 @@ export async function mergeAllDuplicatesAction() {
     groups.set(c.name, arr);
   }
 
-  let totalMerged = 0;
-  for (const [, members] of groups) {
-    if (members.length < 2) continue;
-    const [primary, ...rest] = members;
-    const restIds = rest.map((c) => c.id);
-    const mergeBalance = rest.reduce((sum, c) => sum + c.balanceCents, 0);
+  const totalMerged = await db.transaction(async (tx) => {
+    let count = 0;
+    for (const [, members] of groups) {
+      if (members.length < 2) continue;
+      const [primary, ...rest] = members;
+      const restIds = rest.map((c) => c.id);
+      const mergeBalance = rest.reduce((sum, c) => sum + c.balanceCents, 0);
 
-    await db.transaction(async (tx) => {
       await tx
         .update(order)
         .set({ customerId: primary.id })
@@ -315,10 +315,10 @@ export async function mergeAllDuplicatesAction() {
       }
 
       await tx.delete(customer).where(inArray(customer.id, restIds));
-    });
-
-    totalMerged += rest.length;
-  }
+      count += rest.length;
+    }
+    return count;
+  });
 
   revalidatePath("/customers");
   revalidatePath("/orders");
