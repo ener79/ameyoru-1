@@ -39,6 +39,7 @@ const ACTION_LABEL: Record<string, string> = {
   DISABLE_USER: "停用用户",
   BATCH_SETTLE: "批量结算",
   ADJUST_ORDER_DURATION: "调整时长",
+  ADJUST_ORDER_RATE: "修改单价",
   MARK_DEPOSIT_PAID: "标记已缴押金",
   MARK_DEPOSIT_UNPAID: "取消押金标记",
   CREATE_PLAYER_INVITE: "创建邀请链接",
@@ -71,6 +72,7 @@ const ACTION_COLOR: Record<string, BadgeVariant> = {
   DISABLE_USER: "destructive",
   BATCH_SETTLE: "success",
   ADJUST_ORDER_DURATION: "secondary",
+  ADJUST_ORDER_RATE: "secondary",
   MARK_DEPOSIT_PAID: "success",
   MARK_DEPOSIT_UNPAID: "outline",
   CREATE_PLAYER_INVITE: "default",
@@ -98,6 +100,12 @@ const DETAIL_LABEL: Record<string, string> = {
   extraMinutes: "追加",
   oldMin: "原时长",
   newMin: "新时长",
+  oldRateCents: "原单价",
+  newRateCents: "新单价",
+  oldPayableCents: "原实付",
+  newPayableCents: "新实付",
+  oldPlayerEarnCents: "原应得",
+  newPlayerEarnCents: "新应得",
   count: "数量",
   title: "标题",
   userName: "用户",
@@ -108,7 +116,18 @@ const DETAIL_LABEL: Record<string, string> = {
   sender: "赠送人",
 };
 
-const CENTS_KEYS = new Set(["payableCents", "playerEarnCents", "amount", "compensationCents"]);
+const CENTS_KEYS = new Set([
+  "payableCents",
+  "playerEarnCents",
+  "amount",
+  "compensationCents",
+  "oldRateCents",
+  "newRateCents",
+  "oldPayableCents",
+  "newPayableCents",
+  "oldPlayerEarnCents",
+  "newPlayerEarnCents",
+]);
 const MIN_KEYS = new Set(["durationMin", "oldMin", "newMin", "extraMinutes"]);
 const PAID_METHOD_LABEL: Record<string, string> = { WECHAT: "微信", ALIPAY: "支付宝" };
 const FAULT_LABEL: Record<string, string> = { PLAYER: "陪玩", CUSTOMER: "客户", SHOP: "店铺", OTHER: "其他" };

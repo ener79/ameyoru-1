@@ -63,6 +63,7 @@ import type {
 } from "@/db/schema";
 import {
   adjustOrderDurationAction,
+  adjustOrderRateAction,
   batchSettleAction,
   cancelOrderAction,
   completeOrderAction,
@@ -379,6 +380,7 @@ function OrderDetailSheet({
   const [pending, startTransition] = useTransition();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [rateOpen, setRateOpen] = useState(false);
   const [confirmUnsettle, setConfirmUnsettle] = useState(false);
 
   const canManage = role === "BOSS" || role === "STAFF";
@@ -421,8 +423,8 @@ function OrderDetailSheet({
   return (
     <>
       <Sheet
-        open={!!order && !cancelOpen && !adjustOpen}
-        onOpenChange={(v) => !v && !cancelOpen && !adjustOpen && onClose()}
+        open={!!order && !cancelOpen && !adjustOpen && !rateOpen}
+        onOpenChange={(v) => !v && !cancelOpen && !adjustOpen && !rateOpen && onClose()}
       >
         <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0">
           {order && (
@@ -655,6 +657,7 @@ function OrderDetailSheet({
                 }
                 onOpenCancel={() => setCancelOpen(true)}
                 onAdjustDuration={() => setAdjustOpen(true)}
+                onAdjustRate={() => setRateOpen(true)}
                 onSettle={(method) =>
                   run(
                     () =>
@@ -701,6 +704,22 @@ function OrderDetailSheet({
         />
       )}
 
+      {order && rateOpen && (
+        <AdjustRateDialog
+          orderId={order.id}
+          playerName={order.playerName}
+          customerName={order.customerName}
+          currentRateCents={order.hourlyRateCents}
+          onClose={(succeeded) => {
+            setRateOpen(false);
+            if (succeeded) {
+              onClose();
+              router.refresh();
+            }
+          }}
+        />
+      )}
+
       <ConfirmDialog
         open={confirmUnsettle}
         onOpenChange={(open) => { if (!open) setConfirmUnsettle(false); }}
@@ -725,6 +744,7 @@ function ActionBar({
   onComplete,
   onOpenCancel,
   onAdjustDuration,
+  onAdjustRate,
   onSettle,
   onUnsettle,
 }: {
@@ -736,9 +756,16 @@ function ActionBar({
   onComplete: () => void;
   onOpenCancel: () => void;
   onAdjustDuration: () => void;
+  onAdjustRate: () => void;
   onSettle: (method: PayMethod) => void;
   onUnsettle: () => void;
 }) {
+  const canCancel = canManage || role === "SERVICE";
+  const canAdjustRate = (canManage || role === "SERVICE") &&
+    order.settleStatus === "UNSETTLED" &&
+    order.orderStatus !== "CANCELED" &&
+    order.prepayUsedCents === 0;
+
   if (order.orderStatus === "IN_PROGRESS") {
     const canComplete = canManage || role === "SERVICE";
     if (!canComplete) return null;
@@ -748,7 +775,17 @@ function ActionBar({
           {pending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
           {role !== "BOSS" ? "标记已收钱" : "标记已完成"}
         </Button>
-        {canManage && (
+        {canAdjustRate && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onAdjustRate}
+            disabled={pending}
+          >
+            修改单价
+          </Button>
+        )}
+        {canCancel && (
           <Button
             variant="outline"
             className="w-full text-destructive hover:text-destructive"
@@ -767,6 +804,32 @@ function ActionBar({
     order.settleStatus === "UNSETTLED" &&
     (order.orderStatus === "COMPLETED" ||
       (order.orderStatus === "CANCELED" && order.playerCompensationCents > 0));
+  if (canSettleNow && !canManage && canCancel && order.orderStatus === "COMPLETED") {
+    return (
+      <div className="border-t px-6 py-4 space-y-2">
+        {canAdjustRate && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onAdjustRate}
+            disabled={pending}
+          >
+            修改单价
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-destructive hover:text-destructive"
+          onClick={onOpenCancel}
+          disabled={pending}
+        >
+          <XCircle /> 取消订单
+        </Button>
+      </div>
+    );
+  }
+
   if (canSettleNow && canManage) {
     const amount =
       order.orderStatus === "CANCELED"
@@ -779,6 +842,16 @@ function ActionBar({
       <div className="border-t px-6 py-4 space-y-2">
         {order.orderStatus === "COMPLETED" && (
           <>
+            {canAdjustRate && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={onAdjustRate}
+                disabled={pending}
+              >
+                修改单价
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -1154,6 +1227,80 @@ function AdjustDurationDialog({
             </Button>
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="animate-spin" />} 确认增加
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AdjustRateDialog({
+  orderId,
+  playerName,
+  customerName,
+  currentRateCents,
+  onClose,
+}: {
+  orderId: string;
+  playerName: string;
+  customerName: string;
+  currentRateCents: number;
+  onClose: (succeeded: boolean) => void;
+}) {
+  const [rate, setRate] = useState(centsToYuanString(currentRateCents));
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const res = await adjustOrderRateAction({
+        id: orderId,
+        hourlyRateYuan: rate,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "修改失败");
+        return;
+      }
+      toast.success("单价已更新");
+      onClose(true);
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>修改单价</DialogTitle>
+          <DialogDescription>
+            {playerName} · {customerName} · 当前单价{" "}
+            <span className="font-mono">{formatYuan(currentRateCents)}/小时</span>
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="adjust-rate">新单价(元/小时)</Label>
+            <Input
+              id="adjust-rate"
+              type="number"
+              step="0.01"
+              min="0"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onClose(false)}
+              disabled={pending}
+            >
+              取消
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="animate-spin" />} 确认修改
             </Button>
           </DialogFooter>
         </form>

@@ -340,6 +340,11 @@ const adjustSchema = z.object({
     .transform((s) => s?.trim() || null),
 });
 
+const adjustRateSchema = z.object({
+  id: z.string(),
+  hourlyRateYuan: z.string(),
+});
+
 export async function adjustOrderDurationAction(
   input: z.infer<typeof adjustSchema>
 ) {
@@ -409,6 +414,121 @@ export async function adjustOrderDurationAction(
   return { ok: true as const };
 }
 
+export async function adjustOrderRateAction(
+  input: z.infer<typeof adjustRateSchema>
+) {
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
+  const parsed = adjustRateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      error: parsed.error.errors[0]?.message ?? "参数错误",
+    };
+  }
+
+  const hourlyRateCents = yuanStringToCents(parsed.data.hourlyRateYuan);
+  if (hourlyRateCents <= 0) {
+    return { ok: false as const, error: "单价必须大于 0" };
+  }
+  if (hourlyRateCents > MAX_AMOUNT_CENTS) {
+    return { ok: false as const, error: "单价超出上限" };
+  }
+  if (hourlyRateCents < DEFAULT_COMMISSION_PER_HOUR_CENTS) {
+    return {
+      ok: false as const,
+      error: `单价不能低于抽成时薪(${DEFAULT_COMMISSION_PER_HOUR_CENTS / 100} 元/小时)`,
+    };
+  }
+
+  const [target] = await db
+    .select({
+      id: order.id,
+      orderStatus: order.orderStatus,
+      settleStatus: order.settleStatus,
+      startAt: order.startAt,
+      durationMin: order.durationMin,
+      hourlyRateCents: order.hourlyRateCents,
+      commissionPerHourCents: order.commissionPerHourCents,
+      originalCents: order.originalCents,
+      discountCents: order.discountCents,
+      payableCents: order.payableCents,
+      prepayUsedCents: order.prepayUsedCents,
+      playerEarnCents: order.playerEarnCents,
+      playerName: user.name,
+      customerName: customer.name,
+    })
+    .from(order)
+    .innerJoin(user, eq(user.id, order.playerId))
+    .innerJoin(customer, eq(customer.id, order.customerId))
+    .where(eq(order.id, parsed.data.id))
+    .limit(1);
+  if (!target) return { ok: false as const, error: "订单不存在" };
+  if (target.orderStatus === "CANCELED") {
+    return { ok: false as const, error: "已取消的订单不能修改单价" };
+  }
+  if (target.settleStatus !== "UNSETTLED") {
+    return { ok: false as const, error: "已结算的订单不能修改" };
+  }
+  if (target.prepayUsedCents > 0) {
+    return { ok: false as const, error: "使用预存抵扣的订单不能修改单价" };
+  }
+
+  const endAt = new Date(
+    target.startAt.getTime() + target.durationMin * 60000
+  );
+  const computed = computeOrder({
+    startAt: target.startAt,
+    endAt,
+    hourlyRateCents,
+    discountCents: target.discountCents,
+    commissionPerHourCents: target.commissionPerHourCents,
+  });
+  if (computed.discountCents > computed.originalCents) {
+    return { ok: false as const, error: "优惠不能超过原价" };
+  }
+
+  const result = await db
+    .update(order)
+    .set({
+      hourlyRateCents,
+      originalCents: computed.originalCents,
+      payableCents: computed.payableCents,
+      commissionCents: computed.commissionCents,
+      playerEarnCents: computed.playerEarnCents,
+    })
+    .where(
+      and(
+        eq(order.id, target.id),
+        eq(order.settleStatus, "UNSETTLED"),
+        eq(order.orderStatus, target.orderStatus),
+        eq(order.prepayUsedCents, 0)
+      )
+    );
+  if (getAffectedRows(result) !== 1) {
+    return { ok: false as const, error: "订单状态已变化,请刷新后重试" };
+  }
+
+  logAudit({
+    actorId: me.id,
+    actorName: me.name,
+    action: "ADJUST_ORDER_RATE",
+    targetType: "order",
+    targetId: target.id,
+    detail: {
+      playerName: target.playerName,
+      customerName: target.customerName,
+      oldRateCents: target.hourlyRateCents,
+      newRateCents: hourlyRateCents,
+      oldPayableCents: target.payableCents,
+      newPayableCents: computed.payableCents,
+      oldPlayerEarnCents: target.playerEarnCents,
+      newPlayerEarnCents: computed.playerEarnCents,
+    },
+  });
+  invalidatePages(target.id);
+  return { ok: true as const };
+}
+
 const cancelSchema = z.object({
   id: z.string(),
   fault: z.enum(["PLAYER", "CUSTOMER", "SHOP", "OTHER"]),
@@ -428,7 +548,7 @@ const cancelSchema = z.object({
 export type CancelOrderInput = z.input<typeof cancelSchema>;
 
 export async function cancelOrderAction(input: CancelOrderInput) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
   const parsed = cancelSchema.safeParse(input);
   if (!parsed.success) {
     return {
