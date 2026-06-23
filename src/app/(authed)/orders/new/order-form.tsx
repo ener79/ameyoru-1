@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +30,7 @@ import {
 import {
   ALL_PRICE_BUCKETS_CENTS,
   DEFAULT_COMMISSION_PER_HOUR_CENTS,
+  GAME_SERVERS,
   PRICE_BUCKETS_CENTS,
 } from "@/lib/constants";
 import { createOrderAction } from "@/server/actions/orders";
@@ -65,6 +73,7 @@ export function OrderForm({
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerWechat, setCustomerWechat] = useState("");
+  const [gameServer, setGameServer] = useState("");
 
   const [sessionDate, setSessionDate] = useState<Date | null>(null);
   const [startTime, setStartTime] = useState<TimeValue | null>(null);
@@ -153,6 +162,10 @@ export function OrderForm({
       toast.error("请填写客户名");
       return;
     }
+    if (!gameServer) {
+      toast.error("请选择大区");
+      return;
+    }
     if (isManager && !playerId) {
       toast.error("请选择陪玩");
       return;
@@ -177,6 +190,7 @@ export function OrderForm({
         customerWechat: matchedCustomer
           ? undefined
           : customerWechat.trim() || undefined,
+        gameServer: gameServer as (typeof GAME_SERVERS)[number],
         startAt: startAt!.toISOString(),
         endAt: endAt!.toISOString(),
         hourlyRateYuan: rate,
@@ -291,6 +305,22 @@ export function OrderForm({
                 </span>
               </label>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="game-server">大区</Label>
+            <Select value={gameServer} onValueChange={setGameServer}>
+              <SelectTrigger id="game-server">
+                <SelectValue placeholder="选择大区" />
+              </SelectTrigger>
+              <SelectContent>
+                {GAME_SERVERS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {sessionDate && (

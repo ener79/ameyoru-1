@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/auth-helpers";
 import { getAffectedRows } from "@/lib/db-utils";
 import { computeOrder } from "@/lib/calc";
 import { yuanStringToCents } from "@/lib/format";
-import { DEFAULT_COMMISSION_PER_HOUR_CENTS, MAX_AMOUNT_CENTS } from "@/lib/constants";
+import { DEFAULT_COMMISSION_PER_HOUR_CENTS, GAME_SERVERS, MAX_AMOUNT_CENTS } from "@/lib/constants";
 import { generateMemberNo, nanoid } from "../id";
 import { logAudit } from "../audit";
 import {
@@ -42,6 +42,7 @@ const createSchema = z.object({
     .transform((s) => s.trim())
     .refine((s) => s.length > 0, "客户名不能全为空格"),
   customerWechat: optionalTrimmed(64),
+  gameServer: z.enum(GAME_SERVERS, { required_error: "请选择大区" }),
   startAt: z.string(),
   endAt: z.string(),
   hourlyRateYuan: z.string(),
@@ -80,6 +81,18 @@ async function findOrCreateCustomer(opts: {
     if (!picked) throw new Error("客户不存在");
     return { ...picked, isNew: false };
   }
+
+  const [existing] = await db
+    .select({
+      id: customer.id,
+      memberNo: customer.memberNo,
+      balanceCents: customer.balanceCents,
+      name: customer.name,
+    })
+    .from(customer)
+    .where(eq(customer.name, opts.name))
+    .limit(1);
+  if (existing) return { ...existing, isNew: false };
 
   for (let i = 0; i < 5; i++) {
     const memberNo = generateMemberNo();
@@ -243,6 +256,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       prepayUsedCents,
       commissionCents: computed.commissionCents,
       playerEarnCents: computed.playerEarnCents,
+      gameServer: data.gameServer,
       note: data.note ?? null,
     });
 

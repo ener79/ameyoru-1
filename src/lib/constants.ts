@@ -48,3 +48,35 @@ export const REVERSIBLE_TXN_TYPES = [
   "SERVICE_DEDUCT",
 ] as const;
 
+export const GAME_SERVERS = [
+  "艾欧尼亚",
+  "祖安",
+  "诺克萨斯",
+  "班德尔城",
+  "皮尔特沃夫",
+  "战争学院",
+  "巨神峰",
+  "雷瑟守备",
+  "裁决之地",
+  "黑色玫瑰",
+  "暗影岛",
+  "钢铁烈阳",
+  "水晶之痕",
+  "均衡教派",
+  "影流",
+  "守望之海",
+  "征服之海",
+  "卡拉曼达",
+  "皮城警备",
+  "比尔吉沃特",
+  "德玛西亚",
+  "弗雷尔卓德",
+  "无畏先锋",
+  "恕瑞玛",
+  "扭曲丛林",
+  "巨龙之巢",
+  "男爵领域",
+] as const;
+
+export type GameServer = (typeof GAME_SERVERS)[number];
+

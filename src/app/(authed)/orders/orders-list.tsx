@@ -99,6 +99,7 @@ interface OrderRow {
   settledAt: string | null;
   paidMethod: PayMethod | null;
   collectorName: string | null;
+  gameServer: string | null;
   cancelFault: CancelFault | null;
   cancelNote: string | null;
   note: string | null;
@@ -258,6 +259,9 @@ export function OrdersList({
                           </>
                         )}
                         <span>{o.customerName}</span>
+                        {o.gameServer && (
+                          <span className="text-muted-foreground">{o.gameServer}</span>
+                        )}
                         {o.discountCents > 0 && (
                           <Tag className="size-3 text-warning" />
                         )}
@@ -486,6 +490,9 @@ function OrderDetailSheet({
                       </span>
                     }
                   />
+                  {order.gameServer && (
+                    <DetailRow label="大区" value={order.gameServer} />
+                  )}
                   {canView && order.customerWechat && (
                     <DetailRow
                       label="微信"

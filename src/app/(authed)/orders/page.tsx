@@ -109,6 +109,7 @@ export default async function OrdersPage({
     settledAt: order.settledAt,
     paidMethod: order.paidMethod,
     collectorName: order.collectorName,
+    gameServer: order.gameServer,
     note: order.note,
     cancelFault: order.cancelFault,
     cancelNote: order.cancelNote,
