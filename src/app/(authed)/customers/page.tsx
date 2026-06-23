@@ -8,6 +8,7 @@ import { SearchBar } from "@/components/search-bar";
 import { Pagination } from "@/components/pagination";
 import { formatDuration, formatYuan } from "@/lib/format";
 import { CustomersList } from "./customers-list";
+import { MergeDuplicatesButton } from "./merge-duplicates-button";
 
 const PAGE_SIZE = 30;
 
@@ -35,6 +36,7 @@ export default async function CustomersPage({
       <PageHeader
         title="客户"
         description={`${totals.count} 位客户 · ${totals.repeats} 位回头客 · 累计 ${formatYuan(totals.totalSpent)} · ${formatDuration(totals.totalDuration)} · 预存余额 ${formatYuan(totals.totalBalance)}`}
+        action={<MergeDuplicatesButton />}
       />
 
       <div className="mb-4">

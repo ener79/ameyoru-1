@@ -274,6 +274,58 @@ export async function mergeCustomersAction(input: z.infer<typeof mergeSchema>) {
   return { ok: true as const, mergedCount };
 }
 
+export async function mergeAllDuplicatesAction() {
+  await requireSession({ role: ["BOSS", "STAFF"] });
+
+  const all = await db
+    .select({ id: customer.id, name: customer.name, balanceCents: customer.balanceCents })
+    .from(customer)
+    .orderBy(asc(customer.name), asc(customer.createdAt));
+
+  const groups = new Map<string, typeof all>();
+  for (const c of all) {
+    const arr = groups.get(c.name) ?? [];
+    arr.push(c);
+    groups.set(c.name, arr);
+  }
+
+  let totalMerged = 0;
+  for (const [, members] of groups) {
+    if (members.length < 2) continue;
+    const [primary, ...rest] = members;
+    const restIds = rest.map((c) => c.id);
+    const mergeBalance = rest.reduce((sum, c) => sum + c.balanceCents, 0);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(order)
+        .set({ customerId: primary.id })
+        .where(inArray(order.customerId, restIds));
+
+      await tx
+        .update(customerBalanceTxn)
+        .set({ customerId: primary.id })
+        .where(inArray(customerBalanceTxn.customerId, restIds));
+
+      if (mergeBalance !== 0) {
+        await tx
+          .update(customer)
+          .set({ balanceCents: sql`${customer.balanceCents} + ${mergeBalance}` })
+          .where(eq(customer.id, primary.id));
+      }
+
+      await tx.delete(customer).where(inArray(customer.id, restIds));
+    });
+
+    totalMerged += rest.length;
+  }
+
+  revalidatePath("/customers");
+  revalidatePath("/orders");
+  revalidatePath("/prepay");
+  return { ok: true as const, mergedCount: totalMerged };
+}
+
 export async function deleteCustomerAction(input: { id: string }) {
   await requireSession({ role: ["BOSS", "STAFF"] });
 
