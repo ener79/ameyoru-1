@@ -181,7 +181,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       .limit(1);
     const defaultRate = p?.defaultRateCents ?? 0;
     hourlyRateCents = yuanStringToCents(data.hourlyRateYuan);
-    if (hourlyRateCents > defaultRate) {
+    if (defaultRate > 0 && hourlyRateCents > defaultRate) {
       return { ok: false as const, error: `单价不能高于默认单价(${defaultRate / 100} 元/小时)` };
     }
   } else {
