@@ -92,15 +92,32 @@ export async function POST(request: Request) {
       if (dup) continue;
       const id = nanoid();
       const name = nickname || `微信用户${memberNo.slice(-4)}`;
-      await db.insert(customer).values({
-        id,
-        memberNo,
-        name,
-        balanceCents: 0,
-        wechatOpenid: wx.openid,
-        mpNickname: nickname || null,
-        mpAvatarUrl: avatarUrl || null,
-      });
+      try {
+        await db.insert(customer).values({
+          id,
+          memberNo,
+          name,
+          balanceCents: 0,
+          wechatOpenid: wx.openid,
+          mpNickname: nickname || null,
+          mpAvatarUrl: avatarUrl || null,
+        });
+      } catch (e) {
+        // 并发下另一个登录请求可能已用同 openid 建好档（wechat_openid unique 冲突）。
+        // 重新按 openid 查，拿到那条返回，保证同一微信只对应一个 customer。
+        const [existing] = await db
+          .select({
+            id: customer.id,
+            memberNo: customer.memberNo,
+            name: customer.name,
+            balanceCents: customer.balanceCents,
+          })
+          .from(customer)
+          .where(eq(customer.wechatOpenid, wx.openid))
+          .limit(1);
+        if (existing) { created = existing; break; }
+        throw e; // 非 openid 冲突（如其他约束）则继续上抛
+      }
       created = { id, memberNo, name, balanceCents: 0 };
       break;
     }
