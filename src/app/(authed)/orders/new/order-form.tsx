@@ -84,7 +84,6 @@ export function OrderForm({
     setStartTime({ hour: (now.getHours() + 23) % 24, minute: now.getMinutes() });
     setEndTime({ hour: now.getHours(), minute: now.getMinutes() });
   }, []);
-  // 陪玩自报:单价锁定为老板设的 defaultRateCents,不可修改
   const [rate, setRate] = useState(
     !isManager && players[0]?.defaultRateCents
       ? centsToYuanString(players[0].defaultRateCents)
@@ -156,6 +155,10 @@ export function OrderForm({
       : 0;
   const cashDueCents = computed ? computed.payableCents - prepayUsedCents : 0;
 
+  const selectedPlayer = players.find((p) => p.id === playerId);
+  const maxRateCents = selectedPlayer?.defaultRateCents ?? 0;
+  const maxRateYuan = maxRateCents > 0 ? centsToYuanString(maxRateCents) : "";
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!customerName.trim()) {
@@ -172,6 +175,10 @@ export function OrderForm({
     }
     if (!computed) {
       toast.error("时长或单价无效");
+      return;
+    }
+    if (!isManager && maxRateCents > 0 && yuanStringToCents(rate) > maxRateCents) {
+      toast.error(`单价不能高于 ${maxRateYuan} 元/小时`);
       return;
     }
     if (computed.discountCents > computed.originalCents) {
@@ -374,14 +381,14 @@ export function OrderForm({
                 type="number"
                 step="0.01"
                 min="0"
+                max={!isManager && maxRateYuan ? maxRateYuan : undefined}
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                readOnly={!isManager}
                 required
               />
-              {!isManager && (
+              {!isManager && maxRateYuan && (
                 <p className="text-xs text-muted-foreground">
-                  单价由店里设定,如需修改请联系管理员
+                  可低于默认单价 {maxRateYuan} 元/小时,不可高于
                 </p>
               )}
             </div>

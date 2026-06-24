@@ -172,7 +172,6 @@ export async function createOrderAction(input: CreateOrderInput) {
     }
   }
 
-  // 陪玩自报:单价强制使用老板设的 defaultRateCents,忽略前端传值(防篡改)
   let hourlyRateCents: number;
   if (me.role === "PLAYER") {
     const [p] = await db
@@ -180,7 +179,11 @@ export async function createOrderAction(input: CreateOrderInput) {
       .from(user)
       .where(eq(user.id, me.id))
       .limit(1);
-    hourlyRateCents = p?.defaultRateCents ?? 0;
+    const defaultRate = p?.defaultRateCents ?? 0;
+    hourlyRateCents = yuanStringToCents(data.hourlyRateYuan);
+    if (hourlyRateCents > defaultRate) {
+      return { ok: false as const, error: `单价不能高于默认单价(${defaultRate / 100} 元/小时)` };
+    }
   } else {
     hourlyRateCents = yuanStringToCents(data.hourlyRateYuan);
   }
