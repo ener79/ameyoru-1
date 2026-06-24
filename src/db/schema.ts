@@ -122,6 +122,12 @@ export const customer = mysqlTable(
     wechat: varchar("wechat", { length: 64 }),
     note: text("note"),
     balanceCents: int("balance_cents").notNull().default(0),
+    // 小程序顾客微信登录身份:openid 唯一。与上面 wechat(微信号,店员手填可见)不同,
+    // 这是顾客自己微信登录小程序时换来的 openid,用于认领/自动建档。
+    wechatOpenid: varchar("wechat_openid", { length: 64 }).unique(),
+    // 首次微信登录自动建档时,从小程序带来的资料(可选)
+    mpNickname: varchar("mp_nickname", { length: 64 }),
+    mpAvatarUrl: varchar("mp_avatar_url", { length: 500 }),
     createdAt: ts("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),
@@ -129,6 +135,7 @@ export const customer = mysqlTable(
   (t) => [
     index("customer_name_idx").on(t.name),
     index("customer_wechat_idx").on(t.wechat),
+    index("customer_wechat_openid_idx").on(t.wechatOpenid),
   ]
 );
 
