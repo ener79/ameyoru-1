@@ -82,6 +82,31 @@ export async function getMyTransactions(
   }));
 }
 
+/** 在役陪玩师列表（顾客展示用，不含敏感信息）。 */
+export async function getActivePlayers() {
+  const rows = await db
+    .select({
+      id: user.id,
+      name: user.name,
+      gender: user.playerGender,
+      rateCents: user.defaultRateCents,
+      avatar: user.image,
+    })
+    .from(user)
+    .where(and(eq(user.role, "PLAYER"), eq(user.active, true)))
+    .orderBy(user.name);
+
+  return rows
+    .filter((r) => r.gender != null && r.rateCents != null)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      gender: r.gender!,
+      rateCents: r.rateCents!,
+      avatar: r.avatar,
+    }));
+}
+
 /** 我的订单（按开始时间倒序），带陪玩名。 */
 export async function getMyOrders(customerId: string, opts: { limit?: number } = {}) {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
