@@ -84,6 +84,44 @@ export type GameServer = (typeof GAME_SERVERS)[number];
 export const MP_COUPON_THRESHOLD = "下单可用·可叠加预存";
 export const MP_COUPON_EXPIRES_AT = new Date("2026-07-31T23:59:59+08:00");
 
+/**
+ * 满4h抽券奖池(服务端定结果)。weight 为权重,仅服务端可见,绝不下发给前端,
+ * 防止反推概率被薅。COUPON 项带 couponName/discountLabel 供发券。
+ */
+export const WHEEL_PRIZES = [
+  { idx: 0, type: "NONE", label: "谢谢参与", weight: 26 },
+  { idx: 1, type: "COUPON", label: "95折券", weight: 22, couponName: "下单95折券", discountLabel: "95折" },
+  { idx: 2, type: "COUPON", label: "9折券", weight: 16, couponName: "下单9折券", discountLabel: "9折" },
+  { idx: 3, type: "AGAIN", label: "再抽一次", weight: 12 },
+  { idx: 4, type: "COUPON", label: "92折券", weight: 8, couponName: "下单92折券", discountLabel: "92折" },
+  { idx: 5, type: "NONE", label: "谢谢参与", weight: 7 },
+  { idx: 6, type: "COUPON", label: "85折券", weight: 5, couponName: "下单85折券", discountLabel: "85折" },
+  { idx: 7, type: "COUPON", label: "8折券", weight: 4, couponName: "下单8折券", discountLabel: "8折" },
+] as const;
+
+/**
+ * 集卡大富翁棋盘(服务端定结果)。14 格,move 量仅服务端可见,绝不下发给前端,
+ * 防止反推路径被薅。COUPON 项带 couponName/discountLabel 供发券;CARD 项带 card 标识。
+ */
+export const MONOPOLY_BOARD = [
+  { idx: 0,  name: "出发",     type: "START" },
+  { idx: 1,  name: "上单卡",   type: "CARD", card: "top" },
+  { idx: 2,  name: "95折券",   type: "COUPON", couponName: "下单95折券", discountLabel: "95折" },
+  { idx: 3,  name: "打野卡",   type: "CARD", card: "jungle" },
+  { idx: 4,  name: "前进2格",  type: "MOVE", move: 2 },
+  { idx: 5,  name: "中单卡",   type: "CARD", card: "mid" },
+  { idx: 6,  name: "谢谢参与", type: "NONE" },
+  { idx: 7,  name: "ADC卡",    type: "CARD", card: "adc" },
+  { idx: 8,  name: "9折券",    type: "COUPON", couponName: "下单9折券", discountLabel: "9折" },
+  { idx: 9,  name: "辅助卡",   type: "CARD", card: "support" },
+  { idx: 10, name: "后退1格",  type: "MOVE", move: -1 },
+  { idx: 11, name: "随机卡",   type: "CARD", card: "random" },
+  { idx: 12, name: "92折券",   type: "COUPON", couponName: "下单92折券", discountLabel: "92折" },
+  { idx: 13, name: "谢谢参与", type: "NONE" },
+] as const;
+export const MONOPOLY_CARD_KEYS = ["top", "jungle", "mid", "adc", "support"] as const;
+export const MONOPOLY_CARD_LABEL: Record<string, string> = { top: "上单", jungle: "打野", mid: "中单", adc: "ADC", support: "辅助" };
+
 /** 签到 7 天奖励周期。COUPON 项带 couponName/discountLabel,供后端发券。 */
 export const CHECKIN_REWARDS = [
   { day: 1, type: "DICE", amount: 3, label: "骰子×3" },

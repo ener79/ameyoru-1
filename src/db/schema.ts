@@ -133,6 +133,12 @@ export const customer = mysqlTable(
     // 营销资产可消耗货币(缓存余额,流水见 customer_asset_txn,二者同事务更新)
     diceCount: int("dice_count").notNull().default(0),
     drawTickets: int("draw_tickets").notNull().default(0),
+    monopolyPos: int("monopoly_pos").notNull().default(0),
+    cardTop: int("card_top").notNull().default(0),
+    cardJungle: int("card_jungle").notNull().default(0),
+    cardMid: int("card_mid").notNull().default(0),
+    cardAdc: int("card_adc").notNull().default(0),
+    cardSupport: int("card_support").notNull().default(0),
     createdAt: ts("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),

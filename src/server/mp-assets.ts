@@ -14,6 +14,7 @@ import {
   type AssetType,
   type CouponSource,
 } from "@/db/schema";
+import { getAffectedRows } from "@/lib/db-utils";
 import { MP_COUPON_EXPIRES_AT, MP_COUPON_THRESHOLD } from "@/lib/constants";
 import { nanoid } from "./id";
 
@@ -50,6 +51,49 @@ export async function grantAsset(
     reason,
     refId: refId ?? null,
   });
+}
+
+/**
+ * 消耗货币:仅当余额 >= amount 时缓存余额 -amount 并写一条负流水。
+ * 返回 true=成功,false=余额不足(并发下第二个请求也会安全失败)。
+ */
+export async function spendAsset(
+  tx: Tx,
+  customerId: string,
+  assetType: AssetType,
+  amount: number,
+  reason: AssetReason,
+  refId?: string
+): Promise<boolean> {
+  const col = assetType === "DICE" ? customer.diceCount : customer.drawTickets;
+  const setObj =
+    assetType === "DICE"
+      ? { diceCount: sql`${customer.diceCount} - ${amount}` }
+      : { drawTickets: sql`${customer.drawTickets} - ${amount}` };
+  const result = await tx
+    .update(customer)
+    .set(setObj)
+    .where(and(eq(customer.id, customerId), sql`${col} >= ${amount}`));
+  if (getAffectedRows(result) !== 1) return false;
+  await tx.insert(customerAssetTxn).values({
+    id: nanoid(),
+    customerId,
+    assetType,
+    delta: -amount,
+    reason,
+    refId: refId ?? null,
+  });
+  return true;
+}
+
+/** 当前货币余额(骰子/抽券)。 */
+export async function getAssetBalances(customerId: string) {
+  const [row] = await db
+    .select({ diceCount: customer.diceCount, drawTickets: customer.drawTickets })
+    .from(customer)
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  return row ?? null;
 }
 
 /** 发券:写一条 UNUSED 卡券实例,门槛/有效期取统一常量。 */
