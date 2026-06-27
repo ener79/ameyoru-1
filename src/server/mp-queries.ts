@@ -5,7 +5,7 @@
  * 这里所有查询都强制按 customerId 过滤，调用方（/api/mp/*）已用 requireCustomer 拿到
  * 当前顾客 id，绝不接受外部传入的任意 customerId。
  */
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customer,
@@ -14,6 +14,7 @@ import {
   user,
   type CustomerBalanceTxnType,
 } from "@/db/schema";
+import { getAffectedRows } from "@/lib/db-utils";
 
 /** 余额流水类型 → 小程序展示类型（小程序 records 页用 RECHARGE/CONSUME/REWARD/REFUND）。 */
 const TXN_KIND: Record<CustomerBalanceTxnType, "RECHARGE" | "CONSUME" | "REWARD" | "REFUND"> = {
@@ -168,10 +169,20 @@ export async function performCheckin(customerId: string) {
     newStreak = 1;
   }
 
-  await db
+  // 原子条件更新:仅当 last_checkin_at 仍早于今日(或为空)才写入。
+  // 并发双签时第二个请求 affectedRows=0,按"今日已签到"拒绝,避免重复计数。
+  const result = await db
     .update(customer)
     .set({ checkinStreak: newStreak, lastCheckinAt: now })
-    .where(eq(customer.id, customerId));
+    .where(
+      and(
+        eq(customer.id, customerId),
+        or(isNull(customer.lastCheckinAt), lt(customer.lastCheckinAt, today))
+      )
+    );
+  if (getAffectedRows(result) !== 1) {
+    return { ok: false as const, msg: "今日已签到" };
+  }
 
   return { ok: true as const, day: newStreak };
 }
