@@ -80,7 +80,11 @@ export const GAME_SERVERS = [
 
 export type GameServer = (typeof GAME_SERVERS)[number];
 
-/** 签到 7 天奖励周期。type 告诉前端该发什么，后端只管连续签到状态。 */
+/** 营销券统一门槛与有效期(活动券,固定到期日)。 */
+export const MP_COUPON_THRESHOLD = "下单可用·可叠加预存";
+export const MP_COUPON_EXPIRES_AT = new Date("2026-07-31T23:59:59+08:00");
+
+/** 签到 7 天奖励周期。COUPON 项带 couponName/discountLabel,供后端发券。 */
 export const CHECKIN_REWARDS = [
   { day: 1, type: "DICE", amount: 3, label: "骰子×3" },
   { day: 2, type: "DICE", amount: 5, label: "骰子×5" },
@@ -88,6 +92,13 @@ export const CHECKIN_REWARDS = [
   { day: 4, type: "DICE", amount: 5, label: "骰子×5" },
   { day: 5, type: "DRAW", amount: 2, label: "抽券×2" },
   { day: 6, type: "DICE", amount: 8, label: "骰子×8" },
-  { day: 7, type: "COUPON", amount: 1, label: "92折券" },
+  {
+    day: 7,
+    type: "COUPON",
+    amount: 1,
+    label: "92折券",
+    couponName: "签到7日 · 下单92折券",
+    discountLabel: "92折",
+  },
 ] as const;
 

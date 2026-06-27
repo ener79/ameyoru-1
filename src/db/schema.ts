@@ -130,6 +130,9 @@ export const customer = mysqlTable(
     mpAvatarUrl: varchar("mp_avatar_url", { length: 500 }),
     checkinStreak: int("checkin_streak").notNull().default(0),
     lastCheckinAt: ts("last_checkin_at"),
+    // 营销资产可消耗货币(缓存余额,流水见 customer_asset_txn,二者同事务更新)
+    diceCount: int("dice_count").notNull().default(0),
+    drawTickets: int("draw_tickets").notNull().default(0),
     createdAt: ts("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),
@@ -304,6 +307,69 @@ export const customerBalanceTxnPlayer = mysqlTable(
   ]
 );
 
+/**
+ * 顾客营销资产流水(骰子/抽券)。每次发放/消耗追加一行,delta 正为发放、负为消耗。
+ * 缓存余额在 customer.diceCount / drawTickets,与本表在同一事务内更新保证一致。
+ */
+export const customerAssetTxn = mysqlTable(
+  "customer_asset_txn",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    customerId: varchar("customer_id", { length: ID_LEN })
+      .notNull()
+      .references(() => customer.id),
+    assetType: mysqlEnum("asset_type", ["DICE", "DRAW"]).notNull(),
+    delta: int("delta").notNull(),
+    reason: mysqlEnum("reason", [
+      "CHECKIN",
+      "PLAY_HOURS",
+      "WHEEL_DRAW",
+      "WHEEL_REFUND",
+      "MONOPOLY_ROLL",
+      "ADMIN",
+    ]).notNull(),
+    // 关联来源 id(如签到记录/抽券记录),可空
+    refId: varchar("ref_id", { length: ID_LEN }),
+    note: text("note"),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [index("customer_asset_txn_customer_idx").on(t.customerId, t.createdAt)]
+);
+
+/**
+ * 顾客卡券实例(下单折扣券)。来源:签到 / 抽券 / 大富翁 / 集卡兑换。
+ */
+export const customerCoupon = mysqlTable(
+  "customer_coupon",
+  {
+    id: varchar("id", { length: ID_LEN }).primaryKey(),
+    customerId: varchar("customer_id", { length: ID_LEN })
+      .notNull()
+      .references(() => customer.id),
+    name: varchar("name", { length: 100 }).notNull(),
+    // 折扣口径,如 "92折"
+    discountLabel: varchar("discount_label", { length: 32 }).notNull(),
+    threshold: varchar("threshold", { length: 100 }),
+    source: mysqlEnum("source", [
+      "CHECKIN",
+      "WHEEL",
+      "MONOPOLY",
+      "CARD_EXCHANGE",
+    ]).notNull(),
+    status: mysqlEnum("status", ["UNUSED", "USED", "EXPIRED"])
+      .notNull()
+      .default("UNUSED"),
+    expiresAt: ts("expires_at"),
+    usedAt: ts("used_at"),
+    createdAt: ts("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3)`),
+  },
+  (t) => [index("customer_coupon_customer_idx").on(t.customerId, t.status)]
+);
+
 /* ------------------------------- 类型 ------------------------------- */
 
 export type Role = "BOSS" | "STAFF" | "SERVICE" | "PLAYER";
@@ -319,6 +385,9 @@ export type CustomerBalanceTxnType =
   | "MANUAL_DEDUCT"
   | "SERVICE_DEDUCT"
   | "REVERSAL";
+export type AssetType = "DICE" | "DRAW";
+export type CouponStatus = "UNUSED" | "USED" | "EXPIRED";
+export type CouponSource = "CHECKIN" | "WHEEL" | "MONOPOLY" | "CARD_EXCHANGE";
 
 /* ----------------------------- 公告 & 活动 ----------------------------- */
 

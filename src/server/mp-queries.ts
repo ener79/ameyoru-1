@@ -15,6 +15,8 @@ import {
   type CustomerBalanceTxnType,
 } from "@/db/schema";
 import { getAffectedRows } from "@/lib/db-utils";
+import { CHECKIN_REWARDS } from "@/lib/constants";
+import { grantAsset, grantCoupon } from "./mp-assets";
 
 /** 余额流水类型 → 小程序展示类型（小程序 records 页用 RECHARGE/CONSUME/REWARD/REFUND）。 */
 const TXN_KIND: Record<CustomerBalanceTxnType, "RECHARGE" | "CONSUME" | "REWARD" | "REFUND"> = {
@@ -43,6 +45,8 @@ export async function getMyProfile(customerId: string) {
       name: customer.name,
       balanceCents: customer.balanceCents,
       mpAvatarUrl: customer.mpAvatarUrl,
+      diceCount: customer.diceCount,
+      drawTickets: customer.drawTickets,
     })
     .from(customer)
     .where(eq(customer.id, customerId))
@@ -169,19 +173,40 @@ export async function performCheckin(customerId: string) {
     newStreak = 1;
   }
 
-  // 原子条件更新:仅当 last_checkin_at 仍早于今日(或为空)才写入。
-  // 并发双签时第二个请求 affectedRows=0,按"今日已签到"拒绝,避免重复计数。
-  const result = await db
-    .update(customer)
-    .set({ checkinStreak: newStreak, lastCheckinAt: now })
-    .where(
-      and(
-        eq(customer.id, customerId),
-        or(isNull(customer.lastCheckinAt), lt(customer.lastCheckinAt, today))
-      )
-    );
-  if (getAffectedRows(result) !== 1) {
-    return { ok: false as const, msg: "今日已签到" };
+  const reward = CHECKIN_REWARDS[newStreak - 1];
+
+  // 原子条件更新 + 发奖,同一事务:仅当 last_checkin_at 仍早于今日(或为空)才写入。
+  // 并发双签时第二个请求 affectedRows=0 → 抛错回滚,按"今日已签到"拒绝,避免重复发奖。
+  try {
+    await db.transaction(async (tx) => {
+      const result = await tx
+        .update(customer)
+        .set({ checkinStreak: newStreak, lastCheckinAt: now })
+        .where(
+          and(
+            eq(customer.id, customerId),
+            or(isNull(customer.lastCheckinAt), lt(customer.lastCheckinAt, today))
+          )
+        );
+      if (getAffectedRows(result) !== 1) throw new Error("ALREADY_CHECKED");
+
+      if (reward.type === "DICE") {
+        await grantAsset(tx, customerId, "DICE", reward.amount, "CHECKIN");
+      } else if (reward.type === "DRAW") {
+        await grantAsset(tx, customerId, "DRAW", reward.amount, "CHECKIN");
+      } else if (reward.type === "COUPON") {
+        await grantCoupon(tx, customerId, {
+          name: reward.couponName,
+          discountLabel: reward.discountLabel,
+          source: "CHECKIN",
+        });
+      }
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "ALREADY_CHECKED") {
+      return { ok: false as const, msg: "今日已签到" };
+    }
+    throw e;
   }
 
   return { ok: true as const, day: newStreak };
