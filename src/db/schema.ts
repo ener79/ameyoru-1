@@ -128,6 +128,8 @@ export const customer = mysqlTable(
     // 首次微信登录自动建档时,从小程序带来的资料(可选)
     mpNickname: varchar("mp_nickname", { length: 64 }),
     mpAvatarUrl: varchar("mp_avatar_url", { length: 500 }),
+    checkinStreak: int("checkin_streak").notNull().default(0),
+    lastCheckinAt: ts("last_checkin_at"),
     createdAt: ts("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP(3)`),

@@ -107,6 +107,75 @@ export async function getActivePlayers() {
     }));
 }
 
+/** 签到状态：今天是否已签、连续天数。 */
+export async function getCheckinStatus(customerId: string) {
+  const [row] = await db
+    .select({
+      checkinStreak: customer.checkinStreak,
+      lastCheckinAt: customer.lastCheckinAt,
+    })
+    .from(customer)
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  if (!row) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkedToday = row.lastCheckinAt
+    ? row.lastCheckinAt >= today
+    : false;
+
+  let streak = row.checkinStreak;
+  if (!checkedToday && streak >= 7) streak = 0;
+
+  return {
+    checkedToday,
+    checkinDays: streak,
+    nextDay: (streak >= 7 ? 0 : streak) + 1,
+  };
+}
+
+/** 执行签到：更新连续天数 + lastCheckinAt，返回签到的第几天。 */
+export async function performCheckin(customerId: string) {
+  const [row] = await db
+    .select({
+      checkinStreak: customer.checkinStreak,
+      lastCheckinAt: customer.lastCheckinAt,
+    })
+    .from(customer)
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  if (!row) return { ok: false as const, msg: "账号不存在" };
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  if (row.lastCheckinAt && row.lastCheckinAt >= today) {
+    return { ok: false as const, msg: "今日已签到" };
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const wasYesterday = row.lastCheckinAt
+    ? row.lastCheckinAt >= yesterday && row.lastCheckinAt < today
+    : false;
+
+  let newStreak: number;
+  if (wasYesterday && row.checkinStreak < 7) {
+    newStreak = row.checkinStreak + 1;
+  } else {
+    newStreak = 1;
+  }
+
+  await db
+    .update(customer)
+    .set({ checkinStreak: newStreak, lastCheckinAt: now })
+    .where(eq(customer.id, customerId));
+
+  return { ok: true as const, day: newStreak };
+}
+
 /** 我的订单（按开始时间倒序），带陪玩名。 */
 export async function getMyOrders(customerId: string, opts: { limit?: number } = {}) {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);

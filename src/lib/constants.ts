@@ -80,3 +80,14 @@ export const GAME_SERVERS = [
 
 export type GameServer = (typeof GAME_SERVERS)[number];
 
+/** 签到 7 天奖励周期。type 告诉前端该发什么，后端只管连续签到状态。 */
+export const CHECKIN_REWARDS = [
+  { day: 1, type: "DICE" as const, amount: 3, label: "骰子×3" },
+  { day: 2, type: "DICE" as const, amount: 5, label: "骰子×5" },
+  { day: 3, type: "DRAW" as const, amount: 1, label: "抽券×1" },
+  { day: 4, type: "DICE" as const, amount: 5, label: "骰子×5" },
+  { day: 5, type: "DRAW" as const, amount: 2, label: "抽券×2" },
+  { day: 6, type: "DICE" as const, amount: 8, label: "骰子×8" },
+  { day: 7, type: "COUPON" as const, amount: 1, label: "92折券" },
+] as const;
+
