@@ -1,4 +1,4 @@
-/** GET /api/mp/players — 在役陪玩师列表（顾客展示用）。 */
+/** GET /api/mp/players — 在役陪玩列表（顾客展示用）。 */
 import { requireCustomer } from "@/server/mp-auth";
 import { getActivePlayers } from "@/server/mp-queries";
 

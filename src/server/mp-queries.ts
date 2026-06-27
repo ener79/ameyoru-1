@@ -82,7 +82,7 @@ export async function getMyTransactions(
   }));
 }
 
-/** 在役陪玩师列表（顾客展示用，不含敏感信息）。 */
+/** 在役陪玩列表（顾客展示用，不含敏感信息）。 */
 export async function getActivePlayers() {
   const rows = await db
     .select({
