@@ -12,7 +12,7 @@ import {
   MONOPOLY_CARD_KEYS,
   MONOPOLY_CARD_LABEL,
 } from "@/lib/constants";
-import { grantCoupon, spendAsset } from "./mp-assets";
+import { grantCoupon, spendAsset, type Tx } from "./mp-assets";
 
 const BOARD_SIZE = MONOPOLY_BOARD.length;
 
@@ -82,17 +82,16 @@ type Reward = {
  * tx 必须由调用方的事务提供;inc 累加到调用方维护的增量表。
  */
 async function settleCouponOrCard(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: Tx,
   customerId: string,
   cell: (typeof MONOPOLY_BOARD)[number],
-  inc: CardCounts,
-  source: "MONOPOLY"
+  inc: CardCounts
 ): Promise<string | null> {
   if (cell.type === "COUPON") {
     await grantCoupon(tx, customerId, {
       name: cell.couponName,
       discountLabel: cell.discountLabel,
-      source,
+      source: "MONOPOLY",
     });
     return null;
   }
@@ -142,9 +141,9 @@ export async function performRoll(customerId: string) {
 
       if (landedCell.type === "COUPON") {
         reward.couponName = landedCell.couponName;
-        await settleCouponOrCard(tx, customerId, landedCell, inc, "MONOPOLY");
+        await settleCouponOrCard(tx, customerId, landedCell, inc);
       } else if (landedCell.type === "CARD") {
-        const key = await settleCouponOrCard(tx, customerId, landedCell, inc, "MONOPOLY");
+        const key = await settleCouponOrCard(tx, customerId, landedCell, inc);
         if (key) {
           reward.card = key;
           reward.cardLabel = MONOPOLY_CARD_LABEL[key];
@@ -157,10 +156,10 @@ export async function performRoll(customerId: string) {
         if (bonusCell.type === "COUPON") {
           reward.bonusName = bonusCell.name;
           reward.bonusCouponName = bonusCell.couponName;
-          await settleCouponOrCard(tx, customerId, bonusCell, inc, "MONOPOLY");
+          await settleCouponOrCard(tx, customerId, bonusCell, inc);
         } else if (bonusCell.type === "CARD") {
           reward.bonusName = bonusCell.name;
-          const bonusKey = await settleCouponOrCard(tx, customerId, bonusCell, inc, "MONOPOLY");
+          const bonusKey = await settleCouponOrCard(tx, customerId, bonusCell, inc);
           if (bonusKey) {
             reward.bonusCard = bonusKey;
             reward.bonusCardLabel = MONOPOLY_CARD_LABEL[bonusKey];
@@ -168,10 +167,10 @@ export async function performRoll(customerId: string) {
         }
       }
 
-      const to = bonusTo ?? landed;
+      const finalPos = bonusTo ?? landed;
 
       // 持久化:新位置 + 卡片增量。卡片列动态,显式逐 key 构造 set(不用动态 .set key)。
-      const setObj: Record<string, unknown> = { monopolyPos: to };
+      const setObj: Record<string, unknown> = { monopolyPos: finalPos };
       if (inc.top > 0) setObj.cardTop = sql`${customer.cardTop} + ${inc.top}`;
       if (inc.jungle > 0) setObj.cardJungle = sql`${customer.cardJungle} + ${inc.jungle}`;
       if (inc.mid > 0) setObj.cardMid = sql`${customer.cardMid} + ${inc.mid}`;
@@ -191,7 +190,8 @@ export async function performRoll(customerId: string) {
       return {
         ok: true as const,
         step,
-        move: { from, to: landed, bonusTo },
+        // bonusTo 恒为最终落点(无移动时即 landed),前端据 bonusTo!==to 判断是否走第二段
+        move: { from, to: landed, bonusTo: finalPos },
         reward,
         cards,
         diceCount: row.diceCount,

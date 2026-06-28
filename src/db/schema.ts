@@ -328,11 +328,9 @@ export const customerAssetTxn = mysqlTable(
     delta: int("delta").notNull(),
     reason: mysqlEnum("reason", [
       "CHECKIN",
-      "PLAY_HOURS",
       "WHEEL_DRAW",
       "WHEEL_REFUND",
       "MONOPOLY_ROLL",
-      "ADMIN",
     ]).notNull(),
     // 关联来源 id(如签到记录/抽券记录),可空
     refId: varchar("ref_id", { length: ID_LEN }),
@@ -392,7 +390,6 @@ export type CustomerBalanceTxnType =
   | "SERVICE_DEDUCT"
   | "REVERSAL";
 export type AssetType = "DICE" | "DRAW";
-export type CouponStatus = "UNUSED" | "USED" | "EXPIRED";
 export type CouponSource = "CHECKIN" | "WHEEL" | "MONOPOLY" | "CARD_EXCHANGE";
 
 /* ----------------------------- 公告 & 活动 ----------------------------- */

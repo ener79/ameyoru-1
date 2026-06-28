@@ -19,15 +19,9 @@ import { MP_COUPON_EXPIRES_AT, MP_COUPON_THRESHOLD } from "@/lib/constants";
 import { nanoid } from "./id";
 
 /** db.transaction 回调里的事务对象类型(与 db 同接口)。 */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-type AssetReason =
-  | "CHECKIN"
-  | "PLAY_HOURS"
-  | "WHEEL_DRAW"
-  | "WHEEL_REFUND"
-  | "MONOPOLY_ROLL"
-  | "ADMIN";
+type AssetReason = "CHECKIN" | "WHEEL_DRAW" | "WHEEL_REFUND" | "MONOPOLY_ROLL";
 
 /** 发放货币:缓存余额 +amount 并写一条正流水。无需守卫。 */
 export async function grantAsset(
