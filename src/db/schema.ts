@@ -133,6 +133,8 @@ export const customer = mysqlTable(
     // 营销资产可消耗货币(缓存余额,流水见 customer_asset_txn,二者同事务更新)
     diceCount: int("dice_count").notNull().default(0),
     drawTickets: int("draw_tickets").notNull().default(0),
+    // 已发放的累计时长里程碑等级(最后一档),防止满4h抽券重复发放。0=未达任何档。
+    hoursTicketLevel: int("hours_ticket_level").notNull().default(0),
     monopolyPos: int("monopoly_pos").notNull().default(0),
     cardTop: int("card_top").notNull().default(0),
     cardJungle: int("card_jungle").notNull().default(0),
@@ -331,6 +333,7 @@ export const customerAssetTxn = mysqlTable(
       "WHEEL_DRAW",
       "WHEEL_REFUND",
       "MONOPOLY_ROLL",
+      "PLAY_HOURS",
     ]).notNull(),
     // 关联来源 id(如签到记录/抽券记录),可空
     refId: varchar("ref_id", { length: ID_LEN }),

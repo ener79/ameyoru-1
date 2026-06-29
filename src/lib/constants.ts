@@ -122,6 +122,16 @@ export const MONOPOLY_BOARD = [
 export const MONOPOLY_CARD_KEYS = ["top", "jungle", "mid", "adc", "support"] as const;
 export const MONOPOLY_CARD_LABEL: Record<string, string> = { top: "上单", jungle: "打野", mid: "中单", adc: "ADC", support: "辅助" };
 
+/**
+ * 满4h抽券:累计完成时长里程碑 → 赠抽券(drawTickets)。level 单调递增,
+ * settle 时发放所有 level > customer.hoursTicketLevel 且 hours 已达成的档。
+ */
+export const PLAY_HOURS_REWARDS = [
+  { level: 1, hours: 4, drawTickets: 1, label: "累计4h · 抽券×1" },
+  { level: 2, hours: 10, drawTickets: 2, label: "累计10h · 抽券×2" },
+  { level: 3, hours: 20, drawTickets: 3, label: "累计20h · 抽券×3" },
+] as const;
+
 /** 签到 7 天奖励周期。COUPON 项带 couponName/discountLabel,供后端发券。 */
 export const CHECKIN_REWARDS = [
   { day: 1, type: "DICE", amount: 3, label: "骰子×3" },

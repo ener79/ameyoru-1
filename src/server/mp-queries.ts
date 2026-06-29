@@ -5,7 +5,7 @@
  * 这里所有查询都强制按 customerId 过滤，调用方（/api/mp/*）已用 requireCustomer 拿到
  * 当前顾客 id，绝不接受外部传入的任意 customerId。
  */
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customer,
@@ -15,7 +15,7 @@ import {
   type CustomerBalanceTxnType,
 } from "@/db/schema";
 import { getAffectedRows } from "@/lib/db-utils";
-import { CHECKIN_REWARDS } from "@/lib/constants";
+import { CHECKIN_REWARDS, PLAY_HOURS_REWARDS } from "@/lib/constants";
 import { grantAsset, grantCoupon } from "./mp-assets";
 
 /** 余额流水类型 → 小程序展示类型（小程序 records 页用 RECHARGE/CONSUME/REWARD/REFUND）。 */
@@ -210,6 +210,54 @@ export async function performCheckin(customerId: string) {
   }
 
   return { ok: true as const, day: newStreak };
+}
+
+/**
+ * 满4h抽券:按累计完成时长里程碑发放 drawTickets。
+ * Lazy settle — 在 GET /api/mp/me 时调用,仅当有新里程碑达成时写入。
+ * 原子守卫:WHERE hoursTicketLevel = currentLevel 防并发重复发放。
+ */
+export async function settlePlayHoursRewards(customerId: string) {
+  const [cust] = await db
+    .select({ hoursTicketLevel: customer.hoursTicketLevel })
+    .from(customer)
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  if (!cust) return;
+
+  const currentLevel = cust.hoursTicketLevel;
+  const maxConfigLevel = PLAY_HOURS_REWARDS[PLAY_HOURS_REWARDS.length - 1].level;
+  if (currentLevel >= maxConfigLevel) return;
+
+  const [result] = await db
+    .select({ totalMin: sql<number>`COALESCE(SUM(${order.durationMin}), 0)` })
+    .from(order)
+    .where(and(eq(order.customerId, customerId), eq(order.orderStatus, "COMPLETED")));
+  const totalHours = (result?.totalMin ?? 0) / 60;
+
+  const pending = PLAY_HOURS_REWARDS.filter(
+    (m) => m.level > currentLevel && totalHours >= m.hours
+  );
+  if (pending.length === 0) return;
+
+  const maxLevel = pending[pending.length - 1].level;
+  const totalTickets = pending.reduce((s, m) => s + m.drawTickets, 0);
+
+  try {
+    await db.transaction(async (tx) => {
+      const upd = await tx
+        .update(customer)
+        .set({ hoursTicketLevel: maxLevel })
+        .where(
+          and(eq(customer.id, customerId), eq(customer.hoursTicketLevel, currentLevel))
+        );
+      if (getAffectedRows(upd) !== 1) throw new Error("LEVEL_CHANGED");
+      await grantAsset(tx, customerId, "DRAW", totalTickets, "PLAY_HOURS");
+    });
+  } catch (e) {
+    if (e instanceof Error && e.message === "LEVEL_CHANGED") return;
+    throw e;
+  }
 }
 
 /** 我的订单（按开始时间倒序），带陪玩名。 */
