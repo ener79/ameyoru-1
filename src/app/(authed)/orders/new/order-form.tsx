@@ -92,6 +92,7 @@ export function OrderForm({
   const [discount, setDiscount] = useState("");
   const [usePrepay, setUsePrepay] = useState(false);
   const [note, setNote] = useState("");
+  const [orderType, setOrderType] = useState<"NORMAL" | "REST">("NORMAL");
 
   /** 切换陪玩时自动同步其默认单价 */
   function handlePlayerChange(newId: string) {
@@ -191,6 +192,7 @@ export function OrderForm({
         : null;
     startTransition(async () => {
       const res = await createOrderAction({
+        orderType,
         playerId: isManager ? playerId : undefined,
         customerId: matchedCustomer?.id,
         customerName: customerName.trim(),
@@ -228,6 +230,41 @@ export function OrderForm({
       className="grid gap-6 lg:grid-cols-[1fr_320px]"
     >
       <div className="space-y-4">
+        <Card className="p-4">
+          <Label className="mb-2 block text-sm font-medium">订单类型</Label>
+          <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-[3px]">
+            <button
+              type="button"
+              onClick={() => setOrderType("NORMAL")}
+              className={cn(
+                "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
+                orderType === "NORMAL"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              普通单
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderType("REST")}
+              className={cn(
+                "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
+                orderType === "REST"
+                  ? "bg-blue-100 text-blue-700 shadow-sm dark:bg-blue-900/50 dark:text-blue-300"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              休息单
+            </button>
+          </div>
+          {orderType === "REST" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              休息单的金额正常计算,但统计时长按 50% 折算
+            </p>
+          )}
+        </Card>
+
         {isManager && (
           <PlayerPicker
             players={players}
