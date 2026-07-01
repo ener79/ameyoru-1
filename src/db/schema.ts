@@ -193,6 +193,10 @@ export const order = mysqlTable(
       .notNull()
       .references(() => customer.id),
 
+    orderType: mysqlEnum("order_type", ["NORMAL", "REST"])
+      .notNull()
+      .default("NORMAL"),
+
     startAt: ts("start_at").notNull(),
     endAt: ts("end_at").notNull(),
     durationMin: int("duration_min").notNull(),
@@ -385,6 +389,7 @@ export type OrderStatus = "IN_PROGRESS" | "COMPLETED" | "CANCELED";
 export type SettleStatus = "UNSETTLED" | "SETTLED";
 export type PayMethod = "WECHAT" | "ALIPAY";
 export type CancelFault = "PLAYER" | "CUSTOMER" | "SHOP" | "OTHER";
+export type OrderType = "NORMAL" | "REST";
 export type CustomerBalanceTxnType =
   | "DEPOSIT"
   | "ORDER_DEBIT"
