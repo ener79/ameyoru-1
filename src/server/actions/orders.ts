@@ -33,6 +33,7 @@ function settlableOrderCondition() {
 }
 
 const createSchema = z.object({
+  orderType: z.enum(["NORMAL", "REST"]).default("NORMAL"),
   playerId: z.string().optional(),
   customerId: z.string().optional(),
   customerName: z
@@ -248,6 +249,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       dispatcherId: me.id,
       playerId,
       customerId: customerRec.id,
+      orderType: data.orderType,
       startAt,
       endAt: endAtStored,
       durationMin: computed.durationMin,
@@ -292,7 +294,7 @@ export async function createOrderAction(input: CreateOrderInput) {
     discountCents: computed.discountCents,
     isSelfReport: me.role === "PLAYER",
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { playerName: selectedPlayer.name, customerName: customerRec.name, payableCents: computed.payableCents, durationMin: computed.durationMin } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { orderType: data.orderType, playerName: selectedPlayer.name, customerName: customerRec.name, payableCents: computed.payableCents, durationMin: computed.durationMin } });
 
   return {
     ok: true as const,
