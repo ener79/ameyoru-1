@@ -73,6 +73,7 @@ import {
 
 interface OrderRow {
   id: string;
+  orderType: "NORMAL" | "REST";
   playerId: string;
   playerName: string;
   playerWechatQrPath: string | null;
@@ -237,6 +238,7 @@ export function OrdersList({
                     className={cn(
                       "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/60",
                       o.orderStatus === "IN_PROGRESS" && "bg-primary/[0.02]",
+                      o.orderType === "REST" && "bg-blue-50/70 dark:bg-blue-950/20",
                       isCanceled && "opacity-70"
                     )}
                   >
@@ -264,6 +266,11 @@ export function OrdersList({
                         )}
                         {o.discountCents > 0 && (
                           <Tag className="size-3 text-warning" />
+                        )}
+                        {o.orderType === "REST" && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] px-1.5 py-0">
+                            休息
+                          </Badge>
                         )}
                       </div>
                       <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-0.5 text-xs">
@@ -490,6 +497,16 @@ function OrderDetailSheet({
                       </span>
                     }
                   />
+                  {order.orderType === "REST" && (
+                    <DetailRow
+                      label="类型"
+                      value={
+                        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                          休息单
+                        </Badge>
+                      }
+                    />
+                  )}
                   {order.gameServer && (
                     <DetailRow label="大区" value={order.gameServer} />
                   )}
