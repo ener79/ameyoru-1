@@ -48,6 +48,7 @@ export async function exportOrdersCSV(opts: {
   const rows = await db
     .select({
       id: order.id,
+      orderType: order.orderType,
       playerName: user.name,
       dispatcherName: dispatcherUser.name,
       customerName: customer.name,
@@ -74,14 +75,16 @@ export async function exportOrdersCSV(opts: {
     .orderBy(desc(order.startAt))
     .limit(5000);
 
-  const headers = ["订单ID", "陪玩", "派单人", "客户", "会员号", "开始时间", "时长", "单价(元)", "原价(元)", "优惠(元)", "实付(元)", "抽成(元)", "陪玩应得(元)", "订单状态", "结算状态", "支付方式", "备注"];
+  const headers = ["订单ID", "订单类型", "陪玩", "派单人", "客户", "会员号", "开始时间", "时长", "单价(元)", "原价(元)", "优惠(元)", "实付(元)", "抽成(元)", "陪玩应得(元)", "订单状态", "结算状态", "支付方式", "备注"];
 
   const statusLabel: Record<string, string> = { IN_PROGRESS: "进行中", COMPLETED: "已完成", CANCELED: "已取消" };
   const settleLabel: Record<string, string> = { UNSETTLED: "未结算", SETTLED: "已结算" };
   const payLabel: Record<string, string> = { WECHAT: "微信", ALIPAY: "支付宝" };
+  const typeLabel: Record<string, string> = { NORMAL: "普通", REST: "休息" };
 
   const csvRows = rows.map((r) => [
     r.id,
+    typeLabel[r.orderType] ?? r.orderType,
     r.playerName,
     r.dispatcherName,
     r.customerName,
