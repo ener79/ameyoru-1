@@ -230,40 +230,42 @@ export function OrderForm({
       className="grid gap-6 lg:grid-cols-[1fr_320px]"
     >
       <div className="space-y-4">
-        <Card className="p-4">
-          <Label className="mb-2 block text-sm font-medium">订单类型</Label>
-          <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-[3px]">
-            <button
-              type="button"
-              onClick={() => setOrderType("NORMAL")}
-              className={cn(
-                "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
-                orderType === "NORMAL"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              普通单
-            </button>
-            <button
-              type="button"
-              onClick={() => setOrderType("REST")}
-              className={cn(
-                "inline-flex h-full items-center rounded-md px-4 text-sm font-medium transition-all",
-                orderType === "REST"
-                  ? "bg-blue-100 text-blue-700 shadow-sm dark:bg-blue-900/50 dark:text-blue-300"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              休息单
-            </button>
-          </div>
-          {orderType === "REST" && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              休息单的金额正常计算,但统计时长按 50% 折算
-            </p>
-          )}
-        </Card>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setOrderType("NORMAL")}
+            className={cn(
+              "relative rounded-xl border-2 p-4 text-left transition-all",
+              orderType === "NORMAL"
+                ? "border-primary bg-primary/5 shadow-sm"
+                : "border-muted bg-card hover:border-muted-foreground/30"
+            )}
+          >
+            <div className="mb-1 text-2xl">⚡</div>
+            <div className="font-semibold">普通单</div>
+            <div className="text-xs text-muted-foreground">时长正常计入统计</div>
+            {orderType === "NORMAL" && (
+              <div className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-primary" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderType("REST")}
+            className={cn(
+              "relative rounded-xl border-2 p-4 text-left transition-all",
+              orderType === "REST"
+                ? "border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-950/30 dark:border-blue-400"
+                : "border-muted bg-card hover:border-muted-foreground/30"
+            )}
+          >
+            <div className="mb-1 text-2xl">😴</div>
+            <div className="font-semibold">休息单</div>
+            <div className="text-xs text-muted-foreground">时长按 50% 折算</div>
+            {orderType === "REST" && (
+              <div className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-blue-500" />
+            )}
+          </button>
+        </div>
 
         {isManager && (
           <PlayerPicker
