@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { order, user, customer } from "@/db/schema";
 import { rangeOf, type RangeKey } from "@/lib/date-range";
 
+const effectiveDurationMin = sql`CASE WHEN ${order.orderType} = 'REST' THEN ${order.durationMin} / 2 ELSE ${order.durationMin} END`;
+
 /**
  * 业务口径:
  * - 业绩数字(流水/抽成/单数/排行榜)只统计 COMPLETED 订单
@@ -57,7 +59,7 @@ export async function playerSummary(playerId: string, range: RangeKey) {
   const [row] = await db
     .select({
       orderCount: sql<number>`count(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then 1 end)`.mapWith(Number),
-      durationMin: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.durationMin} else 0 end), 0)`.mapWith(Number),
+      durationMin: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then (${effectiveDurationMin}) else 0 end), 0)`.mapWith(Number),
       payableCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.payableCents} else 0 end), 0)`.mapWith(Number),
       commissionCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.commissionCents} else 0 end), 0)`.mapWith(Number),
       completedEarnCents: sql<number>`coalesce(sum(case when ${order.orderStatus} = 'COMPLETED' and ${inRange} then ${order.playerEarnCents} else 0 end), 0)`.mapWith(Number),
@@ -95,7 +97,7 @@ export async function playerRank(
   const perPlayer = db
     .select({
       pid: order.playerId,
-      dur: sum(order.durationMin).mapWith(Number).as("dur"),
+      dur: sql<number>`sum(${effectiveDurationMin})`.mapWith(Number).as("dur"),
       pay: sum(order.payableCents).mapWith(Number).as("pay"),
     })
     .from(order)
@@ -155,7 +157,7 @@ export async function shopSummary(range: RangeKey) {
   const [completed] = await db
     .select({
       orderCount: count(),
-      durationMin: sum(order.durationMin).mapWith(Number),
+      durationMin: sql<number>`sum(${effectiveDurationMin})`.mapWith(Number),
       originalCents: sum(order.originalCents).mapWith(Number),
       discountCents: sum(order.discountCents).mapWith(Number),
       payableCents: sum(order.payableCents).mapWith(Number),
@@ -185,7 +187,7 @@ export async function shopSummary(range: RangeKey) {
   const [inProgress] = await db
     .select({
       count: count(),
-      durationMin: sum(order.durationMin).mapWith(Number),
+      durationMin: sql<number>`sum(${effectiveDurationMin})`.mapWith(Number),
       payableCents: sum(order.payableCents).mapWith(Number),
     })
     .from(order)
@@ -234,7 +236,7 @@ export async function leaderboard(range: RangeKey, limit?: number): Promise<Lead
     .select({
       playerId: order.playerId,
       orderCount: count(),
-      durationMin: sum(order.durationMin).mapWith(Number),
+      durationMin: sql<number>`sum(${effectiveDurationMin})`.mapWith(Number),
       payableCents: sum(order.payableCents).mapWith(Number),
       commissionCents: sum(order.commissionCents).mapWith(Number),
       playerEarnCents: sum(order.playerEarnCents).mapWith(Number),
@@ -255,7 +257,7 @@ export async function leaderboard(range: RangeKey, limit?: number): Promise<Lead
     // 次级:流水高的优先
     // 三级:同时长同流水,完成得更早的靠前
     .orderBy(
-      desc(sum(order.durationMin)),
+      desc(sql`sum(${effectiveDurationMin})`),
       desc(sum(order.payableCents)),
       sql`max(${order.completedAt}) asc`
     );
