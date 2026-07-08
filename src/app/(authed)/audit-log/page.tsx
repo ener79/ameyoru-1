@@ -1,18 +1,50 @@
 import { requireSession } from "@/lib/auth-helpers";
 import { db } from "@/db";
 import { auditLog } from "@/db/schema";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
-import { Pagination } from "@/components/pagination";
 import { ClipboardList } from "lucide-react";
-import { formatDuration, formatRelativeDateTime, formatYuan } from "@/lib/format";
-import { AuditFilterBar } from "./audit-filter-bar";
+import { formatRelativeDateTime, formatYuan, formatDuration } from "@/lib/format";
 
-const PAGE_SIZE = 50;
+/**
+ * 审计日志动作码。这是「写入端」的真实来源——所有取值由
+ * src/server/actions/*.ts 中 `logAudit({ action: ... })` 实际发出的字面量
+ * 决定(含三元分支的两端)。新增/删除动作码时,务必同步本联合类型与下方两张
+ * 映射表(TS 会在缺漏时报错,因为两表均为 Record<AuditAction, ...>)。
+ */
+type AuditAction =
+  // orders.ts
+  | "CREATE_ORDER"
+  | "COMPLETE_ORDER"
+  | "ADJUST_ORDER_DURATION"
+  | "CANCEL_ORDER"
+  | "SETTLE_ORDER"
+  | "UNSETTLE_ORDER"
+  | "BATCH_SETTLE"
+  // users.ts
+  | "CREATE_PLAYER"
+  | "ENABLE_USER"
+  | "DISABLE_USER"
+  | "MARK_DEPOSIT_PAID"
+  | "MARK_DEPOSIT_UNPAID"
+  // announcements.ts
+  | "CREATE_ANNOUNCEMENT"
+  | "UPDATE_ANNOUNCEMENT"
+  | "DELETE_ANNOUNCEMENT"
+  | "ENABLE_ANNOUNCEMENT"
+  | "DISABLE_ANNOUNCEMENT"
+  // gifts.ts
+  | "CREATE_GIFT_RECORD"
+  | "CREATE_GIFT_REPORT"
+  | "UPDATE_GIFT_RECORD"
+  | "DELETE_GIFT_RECORD"
+  | "SETTLE_GIFT"
+  | "UNSETTLE_GIFT";
 
+/** Badge 组件真实支持的 variant 联合(见 src/components/ui/badge.tsx) */
 type BadgeVariant =
   | "default"
   | "secondary"
@@ -21,252 +53,144 @@ type BadgeVariant =
   | "warning"
   | "outline";
 
-const ACTION_LABEL: Record<string, string> = {
+const ACTION_LABEL: Record<AuditAction, string> = {
   CREATE_ORDER: "创建订单",
   COMPLETE_ORDER: "标记完成",
+  ADJUST_ORDER_DURATION: "调整时长",
+  CANCEL_ORDER: "取消订单",
   SETTLE_ORDER: "结算",
   UNSETTLE_ORDER: "撤销结算",
-  CANCEL_ORDER: "取消订单",
-  CREATE_USER: "创建账号",
-  UPDATE_USER: "修改账号",
-  TOGGLE_USER: "启用/停用",
-  CREATE_ANNOUNCEMENT: "创建公告",
-  UPDATE_ANNOUNCEMENT: "修改公告",
-  DELETE_ANNOUNCEMENT: "删除公告",
-  TOGGLE_ANNOUNCEMENT: "切换公告",
+  BATCH_SETTLE: "批量结算",
   CREATE_PLAYER: "创建陪玩",
   ENABLE_USER: "启用用户",
   DISABLE_USER: "停用用户",
-  BATCH_SETTLE: "批量结算",
-  ADJUST_ORDER_DURATION: "调整时长",
-  ADJUST_ORDER_RATE: "修改单价",
   MARK_DEPOSIT_PAID: "标记已缴押金",
   MARK_DEPOSIT_UNPAID: "取消押金标记",
-  CREATE_PLAYER_INVITE: "创建邀请链接",
-  DELETE_PLAYER_INVITE: "删除邀请链接",
+  CREATE_ANNOUNCEMENT: "创建公告",
+  UPDATE_ANNOUNCEMENT: "修改公告",
+  DELETE_ANNOUNCEMENT: "删除公告",
   ENABLE_ANNOUNCEMENT: "启用公告",
   DISABLE_ANNOUNCEMENT: "禁用公告",
   CREATE_GIFT_RECORD: "添加礼物记录",
-  CREATE_GIFT_REPORT: "提交礼物报单",
+  CREATE_GIFT_REPORT: "上报礼物",
   UPDATE_GIFT_RECORD: "修改礼物记录",
   DELETE_GIFT_RECORD: "删除礼物记录",
-  SETTLE_GIFT: "支付礼物",
-  UNSETTLE_GIFT: "撤销礼物支付",
+  SETTLE_GIFT: "礼物结算",
+  UNSETTLE_GIFT: "撤销礼物结算",
 };
 
-const ACTION_COLOR: Record<string, BadgeVariant> = {
+const ACTION_COLOR: Record<AuditAction, BadgeVariant> = {
+  // 创建 / 启用 / 正向操作
   CREATE_ORDER: "default",
-  COMPLETE_ORDER: "secondary",
-  SETTLE_ORDER: "success",
-  CANCEL_ORDER: "destructive",
-  UNSETTLE_ORDER: "outline",
-  CREATE_USER: "default",
-  UPDATE_USER: "secondary",
-  TOGGLE_USER: "outline",
-  CREATE_ANNOUNCEMENT: "default",
-  UPDATE_ANNOUNCEMENT: "secondary",
-  DELETE_ANNOUNCEMENT: "destructive",
-  TOGGLE_ANNOUNCEMENT: "outline",
   CREATE_PLAYER: "default",
-  ENABLE_USER: "success",
-  DISABLE_USER: "destructive",
-  BATCH_SETTLE: "success",
-  ADJUST_ORDER_DURATION: "secondary",
-  ADJUST_ORDER_RATE: "secondary",
-  MARK_DEPOSIT_PAID: "success",
-  MARK_DEPOSIT_UNPAID: "outline",
-  CREATE_PLAYER_INVITE: "default",
-  DELETE_PLAYER_INVITE: "destructive",
-  ENABLE_ANNOUNCEMENT: "success",
-  DISABLE_ANNOUNCEMENT: "destructive",
+  ENABLE_USER: "default",
+  MARK_DEPOSIT_PAID: "default",
+  CREATE_ANNOUNCEMENT: "default",
+  ENABLE_ANNOUNCEMENT: "default",
   CREATE_GIFT_RECORD: "default",
   CREATE_GIFT_REPORT: "default",
-  UPDATE_GIFT_RECORD: "secondary",
+  // 结算 / 完成
+  COMPLETE_ORDER: "secondary",
+  SETTLE_ORDER: "secondary",
+  BATCH_SETTLE: "secondary",
+  SETTLE_GIFT: "secondary",
+  // 删除 / 取消 / 停用(破坏性)
+  CANCEL_ORDER: "destructive",
+  DISABLE_USER: "destructive",
+  DELETE_ANNOUNCEMENT: "destructive",
+  DISABLE_ANNOUNCEMENT: "destructive",
   DELETE_GIFT_RECORD: "destructive",
-  SETTLE_GIFT: "success",
+  // 修改 / 撤销 / 中性
+  ADJUST_ORDER_DURATION: "outline",
+  UNSETTLE_ORDER: "outline",
+  MARK_DEPOSIT_UNPAID: "outline",
+  UPDATE_ANNOUNCEMENT: "outline",
+  UPDATE_GIFT_RECORD: "outline",
   UNSETTLE_GIFT: "outline",
 };
 
 const DETAIL_LABEL: Record<string, string> = {
+  orderType: "订单类型",
   playerName: "陪玩",
   customerName: "客户",
-  payableCents: "实付",
-  playerEarnCents: "应得",
-  amount: "金额",
-  paidMethod: "方式",
-  durationMin: "时长",
-  fault: "责任方",
-  compensationCents: "补偿",
-  extraMinutes: "追加",
-  oldMin: "原时长",
-  newMin: "新时长",
-  oldRateCents: "原单价",
-  newRateCents: "新单价",
-  oldPayableCents: "原实付",
-  newPayableCents: "新实付",
-  oldPlayerEarnCents: "原应得",
-  newPlayerEarnCents: "新应得",
-  count: "数量",
-  title: "标题",
-  userName: "用户",
   username: "用户名",
-  siteName: "站点",
+  displayName: "显示名",
+  title: "标题",
   tier: "档位",
   quantity: "数量",
-  sender: "赠送人",
+  sender: "送礼人",
+  note: "备注",
+  count: "数量",
 };
 
-const CENTS_KEYS = new Set([
-  "payableCents",
-  "playerEarnCents",
-  "amount",
-  "compensationCents",
-  "oldRateCents",
-  "newRateCents",
-  "oldPayableCents",
-  "newPayableCents",
-  "oldPlayerEarnCents",
-  "newPlayerEarnCents",
-]);
-const MIN_KEYS = new Set(["durationMin", "oldMin", "newMin", "extraMinutes"]);
-const PAID_METHOD_LABEL: Record<string, string> = { WECHAT: "微信", ALIPAY: "支付宝" };
-const FAULT_LABEL: Record<string, string> = { PLAYER: "陪玩", CUSTOMER: "客户", SHOP: "店铺", OTHER: "其他" };
+const VALUE_MAP: Record<string, Record<string, string>> = {
+  orderType: { NORMAL: "普通单", REST: "休息单" },
+  fault: { PLAYER: "陪玩", CUSTOMER: "客户", SHOP: "店铺", OTHER: "其他" },
+  paidMethod: { WECHAT: "微信", ALIPAY: "支付宝" },
+  type: { NOTICE: "公告", ACTIVITY: "活动" },
+};
 
-function formatDetailValue(key: string, value: unknown): string {
-  const v = String(value);
-  if (CENTS_KEYS.has(key)) return formatYuan(Number(value));
-  if (MIN_KEYS.has(key)) return formatDuration(Number(value));
-  if (key === "paidMethod") return PAID_METHOD_LABEL[v] ?? v;
-  if (key === "fault") return FAULT_LABEL[v] ?? v;
-  return v;
+const CENTS_FIELDS: Record<string, string> = { payableCents: "实付", playerEarnCents: "应得", compensationCents: "补偿", amount: "金额" };
+const MINUTES_FIELDS = new Set(["durationMin", "extraMinutes"]);
+
+function formatDetail(k: string, v: unknown): string {
+  const sv = String(v);
+  if (VALUE_MAP[k]) return `${DETAIL_LABEL[k] ?? k}: ${VALUE_MAP[k][sv] ?? sv}`;
+  if (CENTS_FIELDS[k]) return `${CENTS_FIELDS[k]}: ${formatYuan(Number(v))}`;
+  if (MINUTES_FIELDS.has(k)) return `时长: ${formatDuration(Number(v))}`;
+  return `${DETAIL_LABEL[k] ?? k}: ${sv}`;
 }
 
-export default async function AuditLogPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ actor?: string; action?: string; page?: string }>;
-}) {
+
+export default async function AuditLogPage() {
   await requireSession({ role: ["BOSS"] });
-
-  const params = await searchParams;
-  const actor = params.actor?.trim() ?? "";
-  const action = params.action?.trim() ?? "";
-  const page = Math.max(1, parseInt(params.page ?? "1") || 1);
-
-  // 操作人下拉:按最近活跃排序,同一 actorId 取最新用过的名字去重
-  const actorRows = await db
-    .select({
-      actorId: auditLog.actorId,
-      actorName: auditLog.actorName,
-    })
-    .from(auditLog)
-    .groupBy(auditLog.actorId, auditLog.actorName)
-    .orderBy(desc(sql`MAX(${auditLog.createdAt})`));
-  const seenActor = new Set<string>();
-  const actorOptions: { id: string; name: string }[] = [];
-  for (const r of actorRows) {
-    if (seenActor.has(r.actorId)) continue;
-    seenActor.add(r.actorId);
-    actorOptions.push({ id: r.actorId, name: r.actorName });
-  }
-
-  // 操作类型下拉:只列日志里真实出现过的类型
-  const actionRows = await db
-    .selectDistinct({ action: auditLog.action })
-    .from(auditLog);
-  const actionOptions = actionRows
-    .map((r) => ({ value: r.action, label: ACTION_LABEL[r.action] ?? r.action }))
-    .sort((a, b) => a.label.localeCompare(b.label, "zh"));
-
-  const conditions: ReturnType<typeof eq>[] = [];
-  if (actor) conditions.push(eq(auditLog.actorId, actor));
-  if (action) conditions.push(eq(auditLog.action, action));
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const [countResult] = await db
-    .select({ count: count() })
-    .from(auditLog)
-    .where(where);
-  const total = countResult?.count ?? 0;
 
   const logs = await db
     .select()
     .from(auditLog)
-    .where(where)
     .orderBy(desc(auditLog.createdAt))
-    .limit(PAGE_SIZE)
-    .offset((page - 1) * PAGE_SIZE);
-
-  const hasFilter = !!actor || !!action;
-  const tableEmpty = actorOptions.length === 0;
-
-  const baseParams = new URLSearchParams();
-  if (actor) baseParams.set("actor", actor);
-  if (action) baseParams.set("action", action);
-  const baseQs = baseParams.toString();
-  const baseHref = baseQs ? `/audit-log?${baseQs}` : "/audit-log";
+    .limit(300);
 
   return (
     <>
-      <PageHeader
-        title="操作日志"
-        description={
-          hasFilter ? `筛选结果 · 共 ${total} 条` : `共 ${total} 条操作记录`
-        }
-      />
-      {tableEmpty ? (
+      <PageHeader title="操作日志" description="最近 300 条操作记录" />
+      {logs.length === 0 ? (
         <EmptyState icon={<ClipboardList />} title="暂无操作记录" />
       ) : (
-        <>
-          <AuditFilterBar
-            actor={actor}
-            action={action}
-            actorOptions={actorOptions}
-            actionOptions={actionOptions}
-          />
-          {logs.length === 0 ? (
-            <EmptyState
-              icon={<ClipboardList />}
-              title="没有匹配的记录"
-              description="换个操作人或操作类型试试"
-            />
-          ) : (
-            <Card className="overflow-hidden p-0">
-              <ul className="divide-y text-sm">
-                {logs.map((log) => {
-                  let detail: Record<string, unknown> = {};
-                  try { detail = log.detail ? JSON.parse(log.detail) : {}; } catch {}
-                  return (
-                    <li key={log.id} className="flex items-start gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">{log.actorName}</span>
-                          <Badge variant={ACTION_COLOR[log.action] ?? "outline"} className="text-[10px]">
-                            {ACTION_LABEL[log.action] ?? log.action}
-                          </Badge>
-                        </div>
-                        {Object.keys(detail).length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {Object.entries(detail).map(([k, v]) => `${DETAIL_LABEL[k] ?? k}: ${formatDetailValue(k, v)}`).join(" · ")}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                        {formatRelativeDateTime(log.createdAt)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          )}
-          <Pagination
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            baseHref={baseHref}
-          />
-        </>
+        <Card className="overflow-hidden p-0">
+          <ul className="divide-y text-sm">
+            {logs.map((log) => {
+              let detail: Record<string, unknown> = {};
+              try { detail = log.detail ? JSON.parse(log.detail) : {}; } catch {}
+              // log.action 来自 DB,类型为 string;用作 key 时按 AuditAction 索引,
+              // 配合 ?? 回退兜底未知/历史动作码,无需对结果做不安全的 as 断言。
+              const action = log.action as AuditAction;
+              return (
+                <li key={log.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{log.actorName}</span>
+                      <Badge variant={ACTION_COLOR[action] ?? "outline"} className="text-[10px]">
+                        {ACTION_LABEL[action] ?? log.action}
+                      </Badge>
+                      {log.targetId && (
+                        <span className="text-muted-foreground font-mono text-[10px]">{log.targetId.slice(0, 8)}…</span>
+                      )}
+                    </div>
+                    {Object.keys(detail).length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {Object.entries(detail).map(([k, v]) => formatDetail(k, v)).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
+                    {formatRelativeDateTime(log.createdAt)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
     </>
   );
