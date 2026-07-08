@@ -1,15 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, eq, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { order, customer, customerBalanceTxn, user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
-import { getAffectedRows } from "@/lib/db-utils";
 import { computeOrder } from "@/lib/calc";
 import { yuanStringToCents } from "@/lib/format";
-import { DEFAULT_COMMISSION_PER_HOUR_CENTS, GAME_SERVERS, MAX_AMOUNT_CENTS } from "@/lib/constants";
+import { DEFAULT_COMMISSION_PER_HOUR_CENTS } from "@/lib/constants";
 import { generateMemberNo, nanoid } from "../id";
 import { logAudit } from "../audit";
 import {
@@ -18,22 +17,19 @@ import {
   notifyOrderSettled,
   notifyOrderCanceled,
 } from "@/lib/wecom";
-import { optionalTrimmed } from "@/lib/validation";
 
-const CANCELABLE_ORDER_STATUSES = ["IN_PROGRESS", "COMPLETED"] as const;
-
-function settlableOrderCondition() {
-  return or(
-    eq(order.orderStatus, "COMPLETED"),
-    and(
-      eq(order.orderStatus, "CANCELED"),
-      gt(order.playerCompensationCents, 0)
-    )
-  );
-}
+const optionalTrimmed = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .nullable()
+    .transform((s) => {
+      const v = s?.trim();
+      return v ? v : null;
+    });
 
 const createSchema = z.object({
-  orderType: z.enum(["NORMAL", "REST"]).default("NORMAL"),
   playerId: z.string().optional(),
   customerId: z.string().optional(),
   customerName: z
@@ -43,11 +39,15 @@ const createSchema = z.object({
     .transform((s) => s.trim())
     .refine((s) => s.length > 0, "客户名不能全为空格"),
   customerWechat: optionalTrimmed(64),
-  gameServer: z.enum(GAME_SERVERS, { required_error: "请选择大区" }),
   startAt: z.string(),
   endAt: z.string(),
-  hourlyRateYuan: z.string(),
-  discountYuan: z.string().optional(),
+  hourlyRateYuan: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "单价格式不正确"),
+  discountYuan: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "优惠格式不正确")
+    .optional(),
   usePrepay: z.boolean().optional(),
   note: z.string().optional().nullable(),
 });
@@ -82,18 +82,6 @@ async function findOrCreateCustomer(opts: {
     if (!picked) throw new Error("客户不存在");
     return { ...picked, isNew: false };
   }
-
-  const [existing] = await db
-    .select({
-      id: customer.id,
-      memberNo: customer.memberNo,
-      balanceCents: customer.balanceCents,
-      name: customer.name,
-    })
-    .from(customer)
-    .where(eq(customer.name, opts.name))
-    .limit(1);
-  if (existing) return { ...existing, isNew: false };
 
   for (let i = 0; i < 5; i++) {
     const memberNo = generateMemberNo();
@@ -165,14 +153,7 @@ export async function createOrderAction(input: CreateOrderInput) {
     return { ok: false as const, error: "时间格式无效" };
   }
 
-  // 陪玩自报:开始时间不能超过当前时间 2 小时(防止误选明天)
-  if (me.role === "PLAYER") {
-    const maxFutureMs = 2 * 60 * 60 * 1000;
-    if (startAt.getTime() > Date.now() + maxFutureMs) {
-      return { ok: false as const, error: "开始时间异常,请检查日期是否选到了明天" };
-    }
-  }
-
+  // 陪玩自报:单价强制使用老板设的 defaultRateCents,忽略前端传值(防篡改)
   let hourlyRateCents: number;
   if (me.role === "PLAYER") {
     const [p] = await db
@@ -180,36 +161,19 @@ export async function createOrderAction(input: CreateOrderInput) {
       .from(user)
       .where(eq(user.id, me.id))
       .limit(1);
-    const defaultRate = p?.defaultRateCents ?? 0;
-    hourlyRateCents = yuanStringToCents(data.hourlyRateYuan);
-    if (defaultRate > 0 && hourlyRateCents > defaultRate) {
-      return { ok: false as const, error: `单价不能高于默认单价(${defaultRate / 100} 元/小时)` };
-    }
+    hourlyRateCents = p?.defaultRateCents ?? 0;
   } else {
     hourlyRateCents = yuanStringToCents(data.hourlyRateYuan);
   }
   if (hourlyRateCents <= 0) {
     return { ok: false as const, error: "单价必须大于 0" };
   }
-  if (hourlyRateCents > MAX_AMOUNT_CENTS) {
-    return { ok: false as const, error: "单价超出上限" };
-  }
-  // 单价必须 ≥ 抽成时薪,否则陪玩应得为负,订单会卡死无法取消/结算
-  if (hourlyRateCents < DEFAULT_COMMISSION_PER_HOUR_CENTS) {
-    return {
-      ok: false as const,
-      error: `单价不能低于抽成时薪(${DEFAULT_COMMISSION_PER_HOUR_CENTS / 100} 元/小时)`,
-    };
-  }
 
-  // 陪玩自报不允许填优惠;客服不允许填优惠
+  // 陪玩自报不允许填优惠
   const discountCents =
-    me.role === "PLAYER" || me.role === "SERVICE" || !data.discountYuan
+    me.role === "PLAYER" || !data.discountYuan
       ? 0
       : yuanStringToCents(data.discountYuan);
-  if (discountCents > MAX_AMOUNT_CENTS) {
-    return { ok: false as const, error: "优惠金额超出上限" };
-  }
 
   const computed = computeOrder({
     startAt,
@@ -232,7 +196,7 @@ export async function createOrderAction(input: CreateOrderInput) {
       : endAt;
 
   const id = nanoid();
-  const canUsePrepay = me.role !== "PLAYER" && me.role !== "SERVICE" && !!data.usePrepay;
+  const canUsePrepay = me.role !== "PLAYER" && !!data.usePrepay;
   let prepayUsedCents = 0;
   await db.transaction(async (tx) => {
     const [currentCustomer] = await tx
@@ -249,7 +213,6 @@ export async function createOrderAction(input: CreateOrderInput) {
       dispatcherId: me.id,
       playerId,
       customerId: customerRec.id,
-      orderType: data.orderType,
       startAt,
       endAt: endAtStored,
       durationMin: computed.durationMin,
@@ -261,7 +224,6 @@ export async function createOrderAction(input: CreateOrderInput) {
       prepayUsedCents,
       commissionCents: computed.commissionCents,
       playerEarnCents: computed.playerEarnCents,
-      gameServer: data.gameServer,
       note: data.note ?? null,
     });
 
@@ -294,7 +256,7 @@ export async function createOrderAction(input: CreateOrderInput) {
     discountCents: computed.discountCents,
     isSelfReport: me.role === "PLAYER",
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { orderType: data.orderType, playerName: selectedPlayer.name, customerName: customerRec.name, payableCents: computed.payableCents, durationMin: computed.durationMin } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CREATE_ORDER", targetType: "order", targetId: id, detail: { customerName: customerRec.name, playerName: selectedPlayer.name, durationMin: computed.durationMin, payableCents: computed.payableCents, playerEarnCents: computed.playerEarnCents } });
 
   return {
     ok: true as const,
@@ -306,19 +268,15 @@ export async function createOrderAction(input: CreateOrderInput) {
 }
 
 export async function completeOrderAction(input: { id: string }) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
   const [target] = await db
     .select({
       playerId: order.playerId,
       orderStatus: order.orderStatus,
       payableCents: order.payableCents,
       playerEarnCents: order.playerEarnCents,
-      playerName: user.name,
-      customerName: customer.name,
     })
     .from(order)
-    .innerJoin(user, eq(user.id, order.playerId))
-    .innerJoin(customer, eq(customer.id, order.customerId))
     .where(eq(order.id, input.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -327,11 +285,7 @@ export async function completeOrderAction(input: { id: string }) {
   }
   await db
     .update(order)
-    .set({
-      orderStatus: "COMPLETED",
-      completedAt: new Date(),
-      collectorName: me.role !== "BOSS" ? me.name : null,
-    })
+    .set({ orderStatus: "COMPLETED", completedAt: new Date() })
     .where(eq(order.id, input.id));
   invalidatePages(input.id);
 
@@ -340,7 +294,7 @@ export async function completeOrderAction(input: { id: string }) {
     payableCents: target.payableCents,
     playerEarnCents: target.playerEarnCents,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "COMPLETE_ORDER", targetType: "order", targetId: input.id, detail: { playerName: target.playerName, customerName: target.customerName, payableCents: target.payableCents } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "COMPLETE_ORDER", targetType: "order", targetId: input.id });
 
   return { ok: true as const };
 }
@@ -351,17 +305,12 @@ export async function completeOrderAction(input: { id: string }) {
  */
 const adjustSchema = z.object({
   id: z.string(),
-  extraMinutes: z.number().int().min(1, "至少增加 1 分钟").max(24 * 60, "单次最多增加 24 小时"),
+  extraMinutes: z.number().int().min(1, "至少增加 1 分钟"),
   note: z
     .string()
     .max(500)
     .optional()
     .transform((s) => s?.trim() || null),
-});
-
-const adjustRateSchema = z.object({
-  id: z.string(),
-  hourlyRateYuan: z.string(),
 });
 
 export async function adjustOrderDurationAction(
@@ -387,10 +336,8 @@ export async function adjustOrderDurationAction(
       commissionPerHourCents: order.commissionPerHourCents,
       discountCents: order.discountCents,
       note: order.note,
-      playerName: user.name,
     })
     .from(order)
-    .innerJoin(user, eq(user.id, order.playerId))
     .where(eq(order.id, parsed.data.id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
@@ -428,122 +375,7 @@ export async function adjustOrderDurationAction(
     })
     .where(eq(order.id, target.id));
 
-  logAudit({ actorId: me.id, actorName: me.name, action: "ADJUST_ORDER_DURATION", targetType: "order", targetId: target.id, detail: { playerName: target.playerName, oldMin: target.durationMin, newMin: newDurationMin } });
-  invalidatePages(target.id);
-  return { ok: true as const };
-}
-
-export async function adjustOrderRateAction(
-  input: z.infer<typeof adjustRateSchema>
-) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
-  const parsed = adjustRateSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false as const,
-      error: parsed.error.errors[0]?.message ?? "参数错误",
-    };
-  }
-
-  const hourlyRateCents = yuanStringToCents(parsed.data.hourlyRateYuan);
-  if (hourlyRateCents <= 0) {
-    return { ok: false as const, error: "单价必须大于 0" };
-  }
-  if (hourlyRateCents > MAX_AMOUNT_CENTS) {
-    return { ok: false as const, error: "单价超出上限" };
-  }
-  if (hourlyRateCents < DEFAULT_COMMISSION_PER_HOUR_CENTS) {
-    return {
-      ok: false as const,
-      error: `单价不能低于抽成时薪(${DEFAULT_COMMISSION_PER_HOUR_CENTS / 100} 元/小时)`,
-    };
-  }
-
-  const [target] = await db
-    .select({
-      id: order.id,
-      orderStatus: order.orderStatus,
-      settleStatus: order.settleStatus,
-      startAt: order.startAt,
-      durationMin: order.durationMin,
-      hourlyRateCents: order.hourlyRateCents,
-      commissionPerHourCents: order.commissionPerHourCents,
-      originalCents: order.originalCents,
-      discountCents: order.discountCents,
-      payableCents: order.payableCents,
-      prepayUsedCents: order.prepayUsedCents,
-      playerEarnCents: order.playerEarnCents,
-      playerName: user.name,
-      customerName: customer.name,
-    })
-    .from(order)
-    .innerJoin(user, eq(user.id, order.playerId))
-    .innerJoin(customer, eq(customer.id, order.customerId))
-    .where(eq(order.id, parsed.data.id))
-    .limit(1);
-  if (!target) return { ok: false as const, error: "订单不存在" };
-  if (target.orderStatus === "CANCELED") {
-    return { ok: false as const, error: "已取消的订单不能修改单价" };
-  }
-  if (target.settleStatus !== "UNSETTLED") {
-    return { ok: false as const, error: "已结算的订单不能修改" };
-  }
-  if (target.prepayUsedCents > 0) {
-    return { ok: false as const, error: "使用预存抵扣的订单不能修改单价" };
-  }
-
-  const endAt = new Date(
-    target.startAt.getTime() + target.durationMin * 60000
-  );
-  const computed = computeOrder({
-    startAt: target.startAt,
-    endAt,
-    hourlyRateCents,
-    discountCents: target.discountCents,
-    commissionPerHourCents: target.commissionPerHourCents,
-  });
-  if (computed.discountCents > computed.originalCents) {
-    return { ok: false as const, error: "优惠不能超过原价" };
-  }
-
-  const result = await db
-    .update(order)
-    .set({
-      hourlyRateCents,
-      originalCents: computed.originalCents,
-      payableCents: computed.payableCents,
-      commissionCents: computed.commissionCents,
-      playerEarnCents: computed.playerEarnCents,
-    })
-    .where(
-      and(
-        eq(order.id, target.id),
-        eq(order.settleStatus, "UNSETTLED"),
-        eq(order.orderStatus, target.orderStatus),
-        eq(order.prepayUsedCents, 0)
-      )
-    );
-  if (getAffectedRows(result) !== 1) {
-    return { ok: false as const, error: "订单状态已变化,请刷新后重试" };
-  }
-
-  logAudit({
-    actorId: me.id,
-    actorName: me.name,
-    action: "ADJUST_ORDER_RATE",
-    targetType: "order",
-    targetId: target.id,
-    detail: {
-      playerName: target.playerName,
-      customerName: target.customerName,
-      oldRateCents: target.hourlyRateCents,
-      newRateCents: hourlyRateCents,
-      oldPayableCents: target.payableCents,
-      newPayableCents: computed.payableCents,
-      oldPlayerEarnCents: target.playerEarnCents,
-      newPlayerEarnCents: computed.playerEarnCents,
-    },
-  });
+  logAudit({ actorId: me.id, actorName: me.name, action: "ADJUST_ORDER_DURATION", targetType: "order", targetId: target.id, detail: { extraMinutes: parsed.data.extraMinutes } });
   invalidatePages(target.id);
   return { ok: true as const };
 }
@@ -561,13 +393,16 @@ const cancelSchema = z.object({
       return v ? v : null;
     }),
   /** 给陪玩的补偿金额(元),默认 0 */
-  compensationYuan: z.string().optional(),
+  compensationYuan: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "补偿金额格式不正确")
+    .optional(),
 });
 
 export type CancelOrderInput = z.input<typeof cancelSchema>;
 
 export async function cancelOrderAction(input: CancelOrderInput) {
-  const { user: me } = await requireSession({ role: ["BOSS", "STAFF", "SERVICE"] });
+  const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
   const parsed = cancelSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -585,27 +420,25 @@ export async function cancelOrderAction(input: CancelOrderInput) {
       customerId: order.customerId,
       prepayUsedCents: order.prepayUsedCents,
       customerName: customer.name,
-      playerName: user.name,
     })
     .from(order)
     .innerJoin(customer, eq(customer.id, order.customerId))
-    .innerJoin(user, eq(user.id, order.playerId))
     .where(eq(order.id, id))
     .limit(1);
   if (!target) return { ok: false as const, error: "订单不存在" };
   if (target.orderStatus === "CANCELED") {
     return { ok: false as const, error: "订单已取消" };
   }
-  if (target.settleStatus !== "UNSETTLED") {
-    return { ok: false as const, error: "已结算的订单不能取消" };
-  }
 
-  const compensationCents = compensationYuan
+  const requestedCompensationCents = compensationYuan
     ? Math.max(0, yuanStringToCents(compensationYuan))
     : 0;
-  if (compensationCents > MAX_AMOUNT_CENTS) {
-    return { ok: false as const, error: "补偿金额超出上限" };
+  // M2: 取消前已结算(已打款)的订单,取消后保持 SETTLED,不重开结算(避免二次打款)
+  const wasSettled = target.settleStatus === "SETTLED";
+  if (wasSettled && requestedCompensationCents > 0) {
+    return { ok: false as const, error: "已付款订单取消后不会重新打款,补偿请填 0" };
   }
+  const compensationCents = wasSettled ? 0 : requestedCompensationCents;
   if (compensationCents > target.playerEarnCents) {
     return { ok: false as const, error: "补偿不能超过原应得金额" };
   }
@@ -614,54 +447,52 @@ export async function cancelOrderAction(input: CancelOrderInput) {
   const now = new Date();
   const noCompensation = compensationCents === 0;
 
-  try {
-    await db.transaction(async (tx) => {
-      const result = await tx
-        .update(order)
-        .set({
-          orderStatus: "CANCELED",
-          canceledAt: now,
-          cancelFault: fault,
-          cancelNote: note,
-          playerCompensationCents: compensationCents,
-          settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
-          settledAt: noCompensation ? now : null,
-          paidMethod: null,
-        })
-        .where(
-          and(
-            eq(order.id, id),
-            eq(order.settleStatus, "UNSETTLED"),
-            inArray(order.orderStatus, CANCELABLE_ORDER_STATUSES)
-          )
-        );
-      if (getAffectedRows(result) !== 1) {
-        throw new Error("ORDER_STATE_CHANGED");
-      }
+  let canceled = false;
+  await db.transaction(async (tx) => {
+    // H2: 守卫 orderStatus<>'CANCELED',保证并发双重取消时只有一方真正改动行,
+    // 退款与退存流水也只在真正改动行时执行一次
+    const [res] = await tx
+      .update(order)
+      .set({
+        orderStatus: "CANCELED",
+        canceledAt: now,
+        cancelFault: fault,
+        cancelNote: note,
+        playerCompensationCents: compensationCents,
+        prepayUsedCents: 0,
+        // wasSettled 时保留原有结算状态/时间/支付方式,不重开结算
+        ...(wasSettled
+          ? {}
+          : {
+              settleStatus: noCompensation ? "SETTLED" : "UNSETTLED",
+              settledAt: noCompensation ? now : null,
+              paidMethod: null,
+            }),
+      })
+      .where(and(eq(order.id, id), ne(order.orderStatus, "CANCELED")));
+    if (res.affectedRows === 0) return; // 并发下已被取消,跳过退款与副作用
+    canceled = true;
 
-      if (target.prepayUsedCents > 0) {
-        await tx
-          .update(customer)
-          .set({
-            balanceCents: sql`${customer.balanceCents} + ${target.prepayUsedCents}`,
-          })
-          .where(eq(customer.id, target.customerId));
-        await tx.insert(customerBalanceTxn).values({
-          id: nanoid(),
-          customerId: target.customerId,
-          orderId: id,
-          type: "ORDER_REFUND",
-          amountCents: target.prepayUsedCents,
-          note: "订单取消退回预存",
-          createdById: me.id,
-        });
-      }
-    });
-  } catch (e) {
-    if (e instanceof Error && e.message === "ORDER_STATE_CHANGED") {
-      return { ok: false as const, error: "订单状态已变化,请刷新后重试" };
+    if (target.prepayUsedCents > 0) {
+      await tx
+        .update(customer)
+        .set({
+          balanceCents: sql`${customer.balanceCents} + ${target.prepayUsedCents}`,
+        })
+        .where(eq(customer.id, target.customerId));
+      await tx.insert(customerBalanceTxn).values({
+        id: nanoid(),
+        customerId: target.customerId,
+        orderId: id,
+        type: "ORDER_REFUND",
+        amountCents: target.prepayUsedCents,
+        note: "订单取消退回预存",
+        createdById: me.id,
+      });
     }
-    throw e;
+  });
+  if (!canceled) {
+    return { ok: false as const, error: "订单已取消" };
   }
   invalidatePages(id);
 
@@ -671,72 +502,46 @@ export async function cancelOrderAction(input: CancelOrderInput) {
     fault,
     compensationCents,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "CANCEL_ORDER", targetType: "order", targetId: id, detail: { playerName: target.playerName, customerName: target.customerName, fault, compensationCents } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "CANCEL_ORDER", targetType: "order", targetId: id, detail: { fault, compensationCents } });
 
   return { ok: true as const };
 }
 
-const settleSchema = z.object({
-  id: z.string().min(1),
-  paidMethod: z.enum(["WECHAT", "ALIPAY"]).optional(),
-});
-
-export async function settleOrderAction(input: z.input<typeof settleSchema>) {
+export async function settleOrderAction(input: {
+  id: string;
+  paidMethod?: "WECHAT" | "ALIPAY";
+}) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  const parsed = settleSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false as const, error: parsed.error.errors[0]?.message ?? "参数错误" };
+  const [target] = await db
+    .select({
+      orderStatus: order.orderStatus,
+      settleStatus: order.settleStatus,
+      playerEarnCents: order.playerEarnCents,
+      playerCompensationCents: order.playerCompensationCents,
+    })
+    .from(order)
+    .where(eq(order.id, input.id))
+    .limit(1);
+  if (!target) return { ok: false as const, error: "订单不存在" };
+  // 已完成 或 取消+有补偿 都可以结算
+  const canSettle =
+    target.orderStatus === "COMPLETED" || target.orderStatus === "CANCELED";
+  if (!canSettle) {
+    return { ok: false as const, error: "订单尚未完成或取消,无法结算" };
   }
-  const result = await db
+  // 原子守卫:仅当仍为 UNSETTLED 时结算,避免读后写竞态导致重复打款/重复通知
+  const [res] = await db
     .update(order)
     .set({
       settleStatus: "SETTLED",
       settledAt: new Date(),
-      paidMethod: parsed.data.paidMethod ?? null,
+      paidMethod: input.paidMethod ?? null,
     })
-    .where(
-      and(
-        eq(order.id, parsed.data.id),
-        eq(order.settleStatus, "UNSETTLED"),
-        settlableOrderCondition()
-      )
-    );
-  if (getAffectedRows(result) !== 1) {
-    const [current] = await db
-      .select({
-        orderStatus: order.orderStatus,
-        settleStatus: order.settleStatus,
-        playerCompensationCents: order.playerCompensationCents,
-      })
-      .from(order)
-      .where(eq(order.id, parsed.data.id))
-      .limit(1);
-    if (!current) return { ok: false as const, error: "订单不存在" };
-    if (current.settleStatus === "SETTLED") {
-      return { ok: false as const, error: "已结算,请勿重复操作" };
-    }
-    if (
-      current.orderStatus === "CANCELED" &&
-      current.playerCompensationCents <= 0
-    ) {
-      return { ok: false as const, error: "取消订单无补偿,无需结算" };
-    }
-    return { ok: false as const, error: "订单尚未完成或取消,无法结算" };
+    .where(and(eq(order.id, input.id), eq(order.settleStatus, "UNSETTLED")));
+  if (res.affectedRows === 0) {
+    return { ok: false as const, error: "已结算,请勿重复操作" };
   }
-
-  const [target] = await db
-    .select({
-      orderStatus: order.orderStatus,
-      playerEarnCents: order.playerEarnCents,
-      playerCompensationCents: order.playerCompensationCents,
-      playerName: user.name,
-    })
-    .from(order)
-    .innerJoin(user, eq(user.id, order.playerId))
-    .where(eq(order.id, parsed.data.id))
-    .limit(1);
-  if (!target) return { ok: false as const, error: "订单不存在" };
-  invalidatePages(parsed.data.id);
+  invalidatePages(input.id);
 
   // 取消单结算时金额是补偿,完成单是应得
   const amount =
@@ -746,38 +551,24 @@ export async function settleOrderAction(input: z.input<typeof settleSchema>) {
   notifyOrderSettled({
     actorName: me.name,
     playerEarnCents: amount,
-    paidMethod: parsed.data.paidMethod,
+    paidMethod: input.paidMethod,
   });
-  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: parsed.data.id, detail: { playerName: target.playerName, amount, paidMethod: parsed.data.paidMethod } });
+  logAudit({ actorId: me.id, actorName: me.name, action: "SETTLE_ORDER", targetType: "order", targetId: input.id, detail: { amount, paidMethod: input.paidMethod } });
 
   return { ok: true as const };
 }
 
 export async function unsettleOrderAction(input: { id: string }) {
   const { user: me } = await requireSession({ role: ["BOSS", "STAFF"] });
-  const [info] = await db
-    .select({ playerName: user.name, customerName: customer.name, playerEarnCents: order.playerEarnCents })
-    .from(order)
-    .innerJoin(user, eq(user.id, order.playerId))
-    .innerJoin(customer, eq(customer.id, order.customerId))
-    .where(eq(order.id, input.id))
-    .limit(1);
-  // 禁止撤销「已取消」单的结算:取消单的 SETTLED 是退款流程的终态,
-  // 撤销会让预存退款与结算状态错位,且可能被重复结算。只允许撤销已完成单。
-  const result = await db
+  // 原子守卫:仅当当前确为 SETTLED 时才回退,幂等且防并发重复操作
+  const [res] = await db
     .update(order)
     .set({ settleStatus: "UNSETTLED", settledAt: null, paidMethod: null })
-    .where(
-      and(
-        eq(order.id, input.id),
-        eq(order.settleStatus, "SETTLED"),
-        eq(order.orderStatus, "COMPLETED")
-      )
-    );
-  if (getAffectedRows(result) !== 1) {
-    return { ok: false as const, error: "只能撤销已完成订单的结算" };
+    .where(and(eq(order.id, input.id), eq(order.settleStatus, "SETTLED")));
+  if (res.affectedRows === 0) {
+    return { ok: false as const, error: "订单未结算或不存在,无法撤销结算" };
   }
-  logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id, detail: info ? { playerName: info.playerName, customerName: info.customerName, amount: info.playerEarnCents } : undefined });
+  logAudit({ actorId: me.id, actorName: me.name, action: "UNSETTLE_ORDER", targetType: "order", targetId: input.id });
   invalidatePages(input.id);
   return { ok: true as const };
 }
@@ -790,32 +581,36 @@ export async function batchSettleAction(input: {
   if (!input.ids.length) return { ok: false as const, error: "没有选中订单" };
   if (input.ids.length > 200) return { ok: false as const, error: "单次最多批量结算200单" };
 
-  const uniqueIds = Array.from(new Set(input.ids));
   const now = new Date();
+  let settled = 0;
 
-  const result = await db
-    .update(order)
-    .set({
-      settleStatus: "SETTLED",
-      settledAt: now,
-      paidMethod: input.paidMethod ?? null,
-    })
-    .where(
-      and(
-        inArray(order.id, uniqueIds),
-        eq(order.settleStatus, "UNSETTLED"),
-        settlableOrderCondition()
-      )
-    );
-  const settled = getAffectedRows(result);
+  await db.transaction(async (tx) => {
+    // 批量查询所有目标订单
+    const targets = await tx
+      .select({ id: order.id, orderStatus: order.orderStatus, settleStatus: order.settleStatus })
+      .from(order)
+      .where(inArray(order.id, input.ids));
+
+    // 筛选可结算的
+    const eligibleIds = targets
+      .filter((t) => t.settleStatus === "UNSETTLED" && (t.orderStatus === "COMPLETED" || t.orderStatus === "CANCELED"))
+      .map((t) => t.id);
+
+    if (eligibleIds.length > 0) {
+      // 原子守卫:再带上 settleStatus='UNSETTLED' 条件,只结算仍未结算的行,
+      // 用 affectedRows 统计真正改动的行数,避免并发重复结算被重复计数
+      const [res] = await tx
+        .update(order)
+        .set({ settleStatus: "SETTLED", settledAt: now, paidMethod: input.paidMethod ?? null })
+        .where(and(inArray(order.id, eligibleIds), eq(order.settleStatus, "UNSETTLED")));
+      settled = res.affectedRows;
+    }
+  });
 
   if (settled > 0) {
     logAudit({ actorId: me.id, actorName: me.name, action: "BATCH_SETTLE", targetType: "order", detail: { count: settled, paidMethod: input.paidMethod } });
-    revalidatePath("/overview");
-    revalidatePath("/orders");
-    revalidatePath("/payouts");
-    revalidatePath("/leaderboard");
-    revalidatePath("/customers");
   }
+
+  invalidatePages();
   return { ok: true as const, count: settled };
 }
