@@ -146,6 +146,7 @@ async function createUser(opts: {
   const initialPassword = password ?? generateInitialPassword();
   const ctx = await auth.$context;
   const passwordHash = await ctx.password.hash(initialPassword);
+  const initialQrSecurityCodeHash = qrSecurityCodeHash ?? passwordHash;
 
   try {
     const createdUser = await ctx.internalAdapter.createUser({
@@ -158,7 +159,7 @@ async function createUser(opts: {
       defaultRateCents: defaultRateCents ?? null,
       playerGender: playerGender ?? null,
       mustChangePwd,
-      qrSecurityCodeHash: qrSecurityCodeHash ?? null,
+      qrSecurityCodeHash: initialQrSecurityCodeHash,
     });
     if (!createdUser?.id) {
       return { ok: false, error: "创建失败" };

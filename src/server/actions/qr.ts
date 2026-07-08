@@ -8,8 +8,6 @@ import { db } from "@/db";
 import { user } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 import { readImageUpload } from "@/lib/image-upload";
-import { auth } from "@/lib/auth";
-import { qrSecurityCodeSchema } from "@/lib/qr-security";
 
 const UPLOAD_ROOT = join(process.cwd(), "uploads");
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
@@ -19,35 +17,17 @@ type QrType = "WECHAT" | "ALIPAY";
 const fieldFor = (t: QrType) =>
   t === "WECHAT" ? ("wechatQrPath" as const) : ("alipayQrPath" as const);
 
-async function verifyQrSecurityCode(userId: string, securityCode: string) {
-  if (!securityCode.trim()) {
-    return { ok: false as const, error: "请输入收款码安全码" };
-  }
-
-  const parsed = qrSecurityCodeSchema.safeParse(securityCode);
-  if (!parsed.success) {
-    return {
-      ok: false as const,
-      error: parsed.error.errors[0]?.message ?? "请输入收款码安全码",
-    };
-  }
-
+async function requireQrSecurityCodeReady(userId: string) {
   const [row] = await db
     .select({ qrSecurityCodeHash: user.qrSecurityCodeHash })
     .from(user)
     .where(eq(user.id, userId))
     .limit(1);
   if (!row?.qrSecurityCodeHash) {
-    return { ok: false as const, error: "请联系店长先设置收款码安全码" };
-  }
-
-  const ctx = await auth.$context;
-  const verified = await ctx.password.verify({
-    hash: row.qrSecurityCodeHash,
-    password: parsed.data,
-  });
-  if (!verified) {
-    return { ok: false as const, error: "收款码安全码错误" };
+    return {
+      ok: false as const,
+      error: "请先在我的资料上方设置收款码安全码",
+    };
   }
 
   return { ok: true as const };
@@ -58,12 +38,11 @@ export async function uploadQrCodeAction(formData: FormData) {
 
   const type = formData.get("type") as QrType | null;
   const file = formData.get("file");
-  const securityCode = String(formData.get("securityCode") ?? "");
 
   if (type !== "WECHAT" && type !== "ALIPAY") {
     return { ok: false as const, error: "类型错误" };
   }
-  const codeCheck = await verifyQrSecurityCode(me.id, securityCode);
+  const codeCheck = await requireQrSecurityCodeReady(me.id);
   if (!codeCheck.ok) return codeCheck;
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false as const, error: "请选择文件" };
@@ -99,13 +78,12 @@ export async function uploadQrCodeAction(formData: FormData) {
 
 export async function deleteQrCodeAction(input: {
   type: QrType;
-  securityCode?: string;
 }) {
   const { user: me } = await requireSession({ role: "PLAYER" });
   if (input.type !== "WECHAT" && input.type !== "ALIPAY") {
     return { ok: false as const, error: "类型错误" };
   }
-  const codeCheck = await verifyQrSecurityCode(me.id, input.securityCode ?? "");
+  const codeCheck = await requireQrSecurityCodeReady(me.id);
   if (!codeCheck.ok) return codeCheck;
   const field = fieldFor(input.type);
 

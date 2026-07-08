@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { avatarInitial, formatDate, formatYuan } from "@/lib/format";
 import type { Role } from "@/db/schema";
 import { ProfileEditForm } from "./profile-edit-form";
+import { QrSecurityCodeForm } from "./qr-security-code-form";
 import { QrUploadSection } from "./qr-upload-section";
 
 const roleLabel: Record<Role, string> = {
@@ -113,6 +114,20 @@ export default async function ProfilePage() {
             </Link>
           </Button>
         </Card>
+
+        {isPlayer && (
+          <Card id="qr-security-code" className="p-6 space-y-4 scroll-mt-24">
+            <div>
+              <h2 className="text-base font-semibold">收款码安全码</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                用于更换或删除微信、支付宝收款码。初始安全码默认和初始登录密码一致。
+              </p>
+            </div>
+            <QrSecurityCodeForm
+              hasSecurityCode={!!profile.qrSecurityCodeHash}
+            />
+          </Card>
+        )}
 
         {isPlayer && (
           <Card

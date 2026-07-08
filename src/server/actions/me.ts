@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { user } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getOptionalSession, requireSession } from "@/lib/auth-helpers";
+import { qrSecurityCodeSchema } from "@/lib/qr-security";
 
 const changeOwnPasswordSchema = z.object({
   currentPassword: z.string().min(1, "请输入当前密码"),
@@ -29,6 +30,11 @@ const updateProfileSchema = z.object({
     .min(2, "用户名至少 2 位")
     .max(32)
     .regex(/^[\p{L}\p{N}_.-]+$/u, "用户名只能中文/字母/数字/下划线/点/横线"),
+});
+
+const changeOwnQrSecurityCodeSchema = z.object({
+  currentSecurityCode: z.string().optional(),
+  newSecurityCode: qrSecurityCodeSchema,
 });
 
 export async function updateOwnProfileAction(
@@ -102,5 +108,50 @@ export async function changeOwnPasswordAction(
     .update(user)
     .set({ mustChangePwd: false })
     .where(eq(user.id, session.user.id));
+  return { ok: true as const };
+}
+
+export async function changeOwnQrSecurityCodeAction(
+  input: z.infer<typeof changeOwnQrSecurityCodeSchema>
+) {
+  const { user: me } = await requireSession({ role: "PLAYER" });
+  const parsed = changeOwnQrSecurityCodeSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      error: parsed.error.errors[0]?.message ?? "参数错误",
+    };
+  }
+
+  const [row] = await db
+    .select({ qrSecurityCodeHash: user.qrSecurityCodeHash })
+    .from(user)
+    .where(eq(user.id, me.id))
+    .limit(1);
+  if (!row) return { ok: false as const, error: "账号不存在" };
+
+  const ctx = await auth.$context;
+  if (row.qrSecurityCodeHash) {
+    const currentSecurityCode = parsed.data.currentSecurityCode?.trim();
+    if (!currentSecurityCode) {
+      return { ok: false as const, error: "请输入当前安全码" };
+    }
+
+    const verified = await ctx.password.verify({
+      hash: row.qrSecurityCodeHash,
+      password: currentSecurityCode,
+    });
+    if (!verified) {
+      return { ok: false as const, error: "当前安全码错误" };
+    }
+  }
+
+  const hash = await ctx.password.hash(parsed.data.newSecurityCode);
+  await db
+    .update(user)
+    .set({ qrSecurityCodeHash: hash })
+    .where(eq(user.id, me.id));
+
+  revalidatePath("/profile");
   return { ok: true as const };
 }
